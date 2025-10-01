@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -22,6 +23,7 @@ import java.time.Duration;
  */
 public class Coingecko implements PriceService {
     private static final String COINGECKO_API = "https://api.coingecko.com/api/v3/simple/price";
+    private static final int PRICE_SCALE = 4;
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
@@ -62,7 +64,7 @@ public class Coingecko implements PriceService {
                     ". Make sure you're using the CoinGecko ID (e.g., 'bitcoin' not 'BTC')");
         }
 
-        return new BigDecimal(priceNode.get("usd").asText());
+        return new BigDecimal(priceNode.get("usd").asText()).setScale(PRICE_SCALE, RoundingMode.HALF_UP);
     }
 
     /**
