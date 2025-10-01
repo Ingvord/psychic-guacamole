@@ -2,6 +2,7 @@ package ru.ingvord.trading.service;
 
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.net.http.HttpClient;
 import java.net.http.HttpResponse;
 import java.time.Duration;
@@ -31,6 +32,6 @@ class CoingeckoTest {
 
          var result = instance.getCurrentPrice("bitcoin");
 
-        System.out.println(result);
+         assertEquals(new BigDecimal("117414.0000"), result);
     }
 }

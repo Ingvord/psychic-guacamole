@@ -5,11 +5,14 @@ import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.ScheduledEvent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import ru.ingvord.trading.service.Coingecko;
+import ru.ingvord.trading.service.PriceService;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.*;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -29,10 +32,11 @@ public class TelegramPriceBot implements RequestHandler<ScheduledEvent, String> 
 
     public static final String DYNAMODB_ENDPOINT = System.getenv("DYNAMODB_ENDPOINT");
     private static final String TELEGRAM_BOT_TOKEN = System.getenv("TELEGRAM_BOT_TOKEN");
+    public static final String TELEGRAM_BOT_URL = "https://api.telegram.org/bot" + TELEGRAM_BOT_TOKEN + "/sendMessage";
     private static final String ALERTS_TABLE = System.getenv("ALERTS_TABLE");
-    private static final String COINGECKO_API = "https://api.coingecko.com/api/v3/simple/price";
-    
+
     private final HttpClient httpClient;
+    private final PriceService priceService;
     private final DynamoDbClient dynamoDb;
     private final ObjectMapper objectMapper;
     
@@ -50,6 +54,7 @@ public class TelegramPriceBot implements RequestHandler<ScheduledEvent, String> 
 
         this.dynamoDb = builder.build();
         this.objectMapper = new ObjectMapper();
+        this.priceService = new Coingecko(httpClient);
     }
     
     @Override
@@ -70,7 +75,7 @@ public class TelegramPriceBot implements RequestHandler<ScheduledEvent, String> 
                 List<PriceAlert> symbolAlerts = entry.getValue();
                 
                 try {
-                    double currentPrice = getCurrentPrice(symbol);
+                    BigDecimal currentPrice = getCurrentPrice(symbol);
                     context.getLogger().log(symbol + " current price: $" + currentPrice);
                     
                     checkAlertsAndNotify(symbolAlerts, currentPrice, context);
@@ -123,42 +128,20 @@ public class TelegramPriceBot implements RequestHandler<ScheduledEvent, String> 
         return grouped;
     }
     
-    private double getCurrentPrice(String symbol) throws IOException, InterruptedException {
-        String url = COINGECKO_API + "?ids=" + symbol + "&vs_currencies=usd";
-        
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(url))
-            .header("Accept", "application/json")
-            .timeout(Duration.ofSeconds(10))
-            .build();
-        
-        HttpResponse<String> response = httpClient.send(request, 
-            HttpResponse.BodyHandlers.ofString());
-        
-        if (response.statusCode() != 200) {
-            throw new IOException("API request failed with status: " + response.statusCode());
-        }
-        
-        JsonNode jsonNode = objectMapper.readTree(response.body());
-        JsonNode priceNode = jsonNode.get(symbol);
-        
-        if (priceNode == null || !priceNode.has("usd")) {
-            throw new IOException("Price not found for symbol: " + symbol);
-        }
-        
-        return priceNode.get("usd").asDouble();
+    private BigDecimal getCurrentPrice(String symbol) throws IOException, InterruptedException {
+        return this.priceService.getCurrentPrice(symbol);
     }
     
-    private void checkAlertsAndNotify(List<PriceAlert> alerts, double currentPrice, Context context) {
+    private void checkAlertsAndNotify(List<PriceAlert> alerts, BigDecimal currentPrice, Context context) {
         for (PriceAlert alert : alerts) {
             boolean shouldNotify = false;
             String message = "";
             
-            if (currentPrice <= alert.targetPriceMin) {
+            if (currentPrice.compareTo(BigDecimal.valueOf(alert.targetPriceMin)) <= 0 ){
                 shouldNotify = true;
                 message = String.format("🚨 Price Alert!\n\n%s has dropped to $%.2f\n(Below your target of $%.2f)",
                     alert.symbol.toUpperCase(), currentPrice, alert.targetPriceMin);
-            } else if (currentPrice >= alert.targetPriceMax) {
+            } else if (currentPrice.compareTo(BigDecimal.valueOf(alert.targetPriceMax)) >= 0) {
                 shouldNotify = true;
                 message = String.format("🚀 Price Alert!\n\n%s has risen to $%.2f\n(Above your target of $%.2f)",
                     alert.symbol.toUpperCase(), currentPrice, alert.targetPriceMax);
@@ -180,8 +163,6 @@ public class TelegramPriceBot implements RequestHandler<ScheduledEvent, String> 
     }
     
     private void sendTelegramMessage(long chatId, String message) throws IOException, InterruptedException {
-        String url = "https://api.telegram.org/bot" + TELEGRAM_BOT_TOKEN + "/sendMessage";
-        
         Map<String, Object> payload = Map.of(
             "chat_id", chatId,
             "text", message,
@@ -191,7 +172,7 @@ public class TelegramPriceBot implements RequestHandler<ScheduledEvent, String> 
         String jsonPayload = objectMapper.writeValueAsString(payload);
         
         HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(url))
+            .uri(URI.create(TELEGRAM_BOT_URL))
             .header("Content-Type", "application/json")
             .timeout(Duration.ofSeconds(10))
             .POST(HttpRequest.BodyPublishers.ofString(jsonPayload))
