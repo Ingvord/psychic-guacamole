@@ -60,7 +60,7 @@ public class TelegramWebhookHandler implements RequestHandler<APIGatewayProxyReq
             System.out.println("Using local DynamoDB at: " + endpoint);
         }
 
-        String alertsTable = Optional.ofNullable(System.getenv("DYNAMODB_ENDPOINT")).orElse("price-alerts-local");
+        String alertsTable = Optional.ofNullable(System.getenv("ALERTS_TABLE")).orElse("price-alerts-local");
 
         this.dynamoDb = builder.build();
         this.telegramCommandService = new TelegramBotCommandService(

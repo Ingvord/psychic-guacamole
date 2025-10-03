@@ -18,7 +18,7 @@ Resources:
         Variables:
           TELEGRAM_BOT_TOKEN: 8317511591:AAFoVpiZPUN-qcOQQIQnZMqJ_5OG4yl-TlU
           ALERTS_TABLE: price-alerts-local
-          DYNAMODB_ENDPOINT: http://host.docker.internal:8000
+          DYNAMODB_ENDPOINT: http://dynamodb-local:8000
       Events:
         Webhook:
           Type: HttpApi

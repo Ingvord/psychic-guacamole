@@ -20,8 +20,8 @@ public record PriceAlert(
                 item.get("alertId").s(),
                 Long.parseLong(item.get("chatId").s()),
                 item.get("symbol").s().toLowerCase(),
-                new BigDecimal(item.get("targetPriceMin").s()),
-                new BigDecimal(item.get("targetPriceMax").s()),
+                new BigDecimal(item.get("targetPriceMin").n()),
+                new BigDecimal(item.get("targetPriceMax").n()),
                 Long.parseLong(item.get("createdAt").s().toLowerCase()),
                 item.get("status").s().toLowerCase());
     }

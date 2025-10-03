@@ -16,6 +16,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 import static ru.ingvord.trading.repository.AlertRepository.ALERT_STATUS_ACTIVE;
@@ -71,21 +72,23 @@ public class TelegramPriceBot implements RequestHandler<ScheduledEvent, String>,
                     .collect(
                         Collectors.groupingBy(PriceAlert::symbol));
 
-            // Check prices and send notifications
-            for (Map.Entry<String, List<PriceAlert>> entry : alertsBySymbol.entrySet()) {
-                String symbol = entry.getKey();
-                List<PriceAlert> symbolAlerts = entry.getValue();
-                
-                try {
-                    BigDecimal currentPrice = getCurrentPrice(symbol);
-                    context.getLogger().log(symbol + " current price: $" + currentPrice);
-                    
-                    checkAlertsAndNotify(symbolAlerts, currentPrice, context);
-                } catch (Exception e) {
-                    context.getLogger().log("Error checking price for " + symbol + ": " + e.getMessage());
-                }
-            }
-            
+            List<CompletableFuture<Void>> futures = alertsBySymbol.entrySet().stream()
+                    .map(entry -> CompletableFuture.supplyAsync(() -> {
+                        try {
+                            return getCurrentPrice(entry.getKey());
+                        } catch (Exception e) {
+                            context.getLogger().log("Error: " + e.getMessage());
+                            return null;
+                        }
+                    }).thenAccept(price -> {
+                        if (price != null) {
+                            checkAlertsAndNotify(entry.getValue(), price, context);
+                        }
+                    }))
+                    .toList();
+
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
             return "Price check completed successfully";
             
         } catch (Exception e) {
