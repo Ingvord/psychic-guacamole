@@ -1,0 +1,230 @@
+package ru.ingvord.trading.service;
+
+import com.amazonaws.services.lambda.runtime.Context;
+import ru.ingvord.trading.repository.AlertRepository;
+import ru.ingvord.trading.repository.PriceAlert;
+import ru.ingvord.trading.telegram.TelegramBotMessages;
+import ru.ingvord.trading.telegram.TelegramUpdate;
+import software.amazon.awssdk.services.dynamodb.model.*;
+
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import static ru.ingvord.trading.repository.AlertRepository.ALERT_STATUS_ACTIVE;
+import static ru.ingvord.trading.telegram.TelegramBotMessages.*;
+import static ru.ingvord.trading.telegram.TelegramBotMessages.INVALID_PRICE;
+
+public class TelegramBotCommandService {
+    // Command patterns
+    private static final Pattern ALERT_PATTERN = Pattern.compile("/alert\\s+(\\w+)\\s+([\\d.]+)\\s+([\\d.]+)");
+    private static final Pattern PRICE_PATTERN = Pattern.compile("/price\\s+(\\w+)");
+    private static final Pattern REMOVE_PATTERN = Pattern.compile("/remove\\s+(\\w+)");
+
+    private final PriceService priceService;
+    private final AlertRepository alertRepository;
+
+    public TelegramBotCommandService(PriceService priceService, AlertRepository alertRepository) {
+        this.priceService = priceService;
+        this.alertRepository = alertRepository;
+    }
+
+
+    public String execute(TelegramUpdate update, Context context) {
+        // Handle the command
+        return handleCommand(update.chatId, update.text, context);
+    };
+
+    private String handleCommand(long chatId, String text, Context context) {
+        if (text.startsWith("/start")) {
+            return TelegramBotMessages.WELCOME;
+        } else if (text.startsWith("/help")) {
+            return TelegramBotMessages.HELP;
+        } else if (text.startsWith("/alert")) {
+            return handleAlertCommand(chatId, text, context);
+        } else if (text.startsWith("/list")) {
+            return handleListCommand(chatId, context);
+        } else if (text.startsWith("/remove")) {
+            return handleRemoveCommand(chatId, text, context);
+        } else if (text.startsWith("/clear")) {
+            return handleClearCommand(chatId, context);
+        } else if (text.startsWith("/price")) {
+            return handlePriceCommand(text, context);
+        } else if (text.startsWith("/")) {
+            return "Unknown command. Type /help to see available commands.";
+        }
+
+        return null; // Don't respond to non-commands
+    }
+
+    private String handleAlertCommand(long chatId, String text, Context context) {
+        Matcher matcher = ALERT_PATTERN.matcher(text);
+        if (!matcher.matches()) {
+            return TelegramBotMessages.INVALID_ALERT;
+        }
+
+        String symbol = matcher.group(1).toLowerCase();
+        BigDecimal minPrice = new BigDecimal(matcher.group(2));
+        BigDecimal maxPrice = new BigDecimal(matcher.group(3));
+
+        if (minPrice.compareTo(maxPrice) >= 0) {
+            return "❌ Minimum price must be less than maximum price!";
+        }
+
+        try {
+            // Verify symbol exists by checking current price
+            double currentPrice = getCurrentPrice(symbol);
+
+            // Create alert
+            String alertId = UUID.randomUUID().toString();
+            createAlert(alertId, chatId, symbol, minPrice, maxPrice);
+
+            return String.format(ALERT_CREATED,
+                    symbol.toUpperCase(), currentPrice, minPrice, maxPrice, alertId.substring(0, 8),
+                    symbol.toUpperCase());
+
+        } catch (Exception e) {
+            context.getLogger().log("Error creating alert: " + e.getMessage());
+            return "❌ Failed to create alert. Please check the symbol name and try again.\n\n" +
+                    "Popular symbols: bitcoin, ethereum, cardano, solana, dogecoin";
+        }
+    }
+
+    private String handleListCommand(long chatId, Context context) {
+        try {
+            List<PriceAlert> alerts = getUserAlerts(chatId);
+
+            if (alerts.isEmpty()) {
+                return NO_ALERTS;
+            }
+
+            StringBuilder response = new StringBuilder("📊 **Your Active Alerts:**\n\n");
+
+            for (PriceAlert alert : alerts) {
+                String alertId = alert.alertId();
+                String symbol = alert.symbol();
+                double minPrice = alert.targetPriceMin().doubleValue();
+                double maxPrice = alert.targetPriceMax().doubleValue();
+
+                response.append(String.format(
+                        "🔔 **%s**\n" +
+                                "   Range: $%.2f - $%.2f\n" +
+                                "   ID: `%s`\n\n",
+                        symbol, minPrice, maxPrice, alertId.substring(0, 8)
+                ));
+            }
+
+            response.append("Use `/remove <alert_id>` to remove specific alerts\n");
+            response.append("Use `/clear` to remove all alerts");
+
+            return response.toString();
+
+        } catch (Exception e) {
+            context.getLogger().log("Error listing alerts: " + e.getMessage());
+            return "❌ Failed to retrieve your alerts. Please try again later.";
+        }
+    }
+
+    private String handleRemoveCommand(long chatId, String text, Context context) {
+        Matcher matcher = REMOVE_PATTERN.matcher(text);
+        if (!matcher.matches()) {
+            return INVALID_REMOVE;
+        }
+
+        String alertIdPrefix = matcher.group(1);
+
+        try {
+            List<PriceAlert> alerts = getUserAlerts(chatId);
+            String fullAlertId = null;
+
+            // Find matching alert by prefix
+            for (PriceAlert alert : alerts) {
+                String alertId = alert.alertId();
+                if (alertId.startsWith(alertIdPrefix)) {
+                    fullAlertId = alertId;
+                    break;
+                }
+            }
+
+            if (fullAlertId == null) {
+                return "❌ Alert not found. Use `/list` to see your active alerts.";
+            }
+
+            removeAlert(fullAlertId);
+
+            return "✅ Alert removed successfully!";
+
+        } catch (Exception e) {
+            context.getLogger().log("Error removing alert: " + e.getMessage());
+            return "❌ Failed to remove alert. Please try again later.";
+        }
+    }
+
+    private String handleClearCommand(long chatId, Context context) {
+        try {
+            List<PriceAlert> alerts = getUserAlerts(chatId);
+
+            if (alerts.isEmpty()) {
+                return "📭 You don't have any active alerts to clear.";
+            }
+
+            for (PriceAlert alert : alerts) {
+                removeAlert(alert.alertId());
+            }
+
+            return String.format("✅ Cleared %d alerts successfully!", alerts.size());
+
+        } catch (Exception e) {
+            context.getLogger().log("Error clearing alerts: " + e.getMessage());
+            return "❌ Failed to clear alerts. Please try again later.";
+        }
+    }
+
+    private String handlePriceCommand(String text, Context context) {
+        Matcher matcher = PRICE_PATTERN.matcher(text);
+        if (!matcher.matches()) {
+            return INVALID_PRICE;
+        }
+
+        String symbol = matcher.group(1).toLowerCase();
+
+        try {
+            double currentPrice = getCurrentPrice(symbol);
+
+            return String.format("""
+                💰 **Current Price**
+                
+                **%s:** $%.2f
+                
+                Want to set an alert? Use:
+                `/alert %s <min_price> <max_price>`
+                """,
+                    symbol.toUpperCase(), currentPrice, symbol);
+
+        } catch (Exception e) {
+            context.getLogger().log("Error getting price: " + e.getMessage());
+            return "❌ Failed to get price. Please check the symbol name and try again.\n\n" +
+                    "Popular symbols: bitcoin, ethereum, cardano, solana, dogecoin";
+        }
+    }
+
+    private double getCurrentPrice(String symbol) throws IOException, InterruptedException {
+        return priceService.getCurrentPrice(symbol).doubleValue();
+    }
+
+    private void createAlert(String alertId, long chatId, String symbol, BigDecimal minPrice, BigDecimal maxPrice) {
+        alertRepository.save(new PriceAlert(alertId, chatId, symbol, minPrice, maxPrice, System.currentTimeMillis(), ALERT_STATUS_ACTIVE));
+    }
+
+    private List<PriceAlert> getUserAlerts(long chatId) {
+        return alertRepository.findByChatId(chatId);
+    }
+
+    private void removeAlert(String alertId) {
+        alertRepository.delete(alertId);
+    }
+
+
+}
