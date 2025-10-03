@@ -17,6 +17,7 @@ Resources:
       Environment:
         Variables:
           TELEGRAM_BOT_TOKEN: 8317511591:AAFoVpiZPUN-qcOQQIQnZMqJ_5OG4yl-TlU
+          WEBHOOK_SECRET_TOKEN: MTc1OTQ5Nzg4OA
           ALERTS_TABLE: price-alerts-local
           DYNAMODB_ENDPOINT: http://dynamodb-local:8000
       Events:

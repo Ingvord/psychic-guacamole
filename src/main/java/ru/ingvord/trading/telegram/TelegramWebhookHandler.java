@@ -76,7 +76,7 @@ public class TelegramWebhookHandler implements RequestHandler<APIGatewayProxyReq
             var verified = verifyTelegramRequest(input, context);
             if(!verified){
                 context.getLogger().log("Invalid request: secret token does not match");
-                return createResponse(200, "OK");
+                return createResponse(403, "{\"error\": \"Invalid secret token\"}");
             }
 
             TelegramUpdate update = TelegramUpdate.parse(input.getBody());
