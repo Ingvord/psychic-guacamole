@@ -226,7 +226,7 @@
                         <artifactId>native-maven-plugin</artifactId>
                         <configuration>
                             <imageName>price-bot</imageName>
-                            <mainClass>ru.ingvord.trading.telegram.TelegramPriceBot</mainClass>
+                            <mainClass>com.amazonaws.services.lambda.runtime.api.client.AWSLambda</mainClass>
                             <buildArgs>
                                 <buildArg>--no-fallback</buildArg>
                                 <buildArg>--enable-url-protocols=https,http</buildArg>
@@ -256,7 +256,7 @@
                         <artifactId>native-maven-plugin</artifactId>
                         <configuration>
                             <imageName>webhook-handler</imageName>
-                            <mainClass>ru.ingvord.trading.telegram.TelegramWebhookHandler</mainClass>
+                            <mainClass>com.amazonaws.services.lambda.runtime.api.client.AWSLambda</mainClass>
                             <buildArgs>
                                 <buildArg>--no-fallback</buildArg>
                                 <buildArg>--enable-url-protocols=https,http</buildArg>

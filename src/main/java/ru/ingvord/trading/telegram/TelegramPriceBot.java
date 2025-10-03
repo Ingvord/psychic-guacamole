@@ -38,25 +38,30 @@ public class TelegramPriceBot implements RequestHandler<ScheduledEvent, String>,
 
     private final String alertsTable;
     private final String botApiToken;
-    private final String dynamodbEndpoint;
     private final HttpClient httpClient;
     private final DynamoDbClient dynamoDb;
 
     {
         alertsTable = System.getenv("ALERTS_TABLE");
         botApiToken = System.getenv("TELEGRAM_BOT_TOKEN");
-        dynamodbEndpoint =  System.getenv("DYNAMODB_ENDPOINT");
     }
 
     public TelegramPriceBot() {
         this.httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .build();
-        
-        this.dynamoDb = DynamoDbClient.builder()
-                .region(Region.US_EAST_1)
-                .endpointOverride(URI.create(dynamodbEndpoint))
-                .build();
+
+        // Support local development with environment variable
+        var builder = DynamoDbClient.builder()
+                .region(Region.EU_CENTRAL_1);
+
+        String endpoint = System.getenv("DYNAMODB_ENDPOINT");
+        if (endpoint != null && !endpoint.isEmpty()) {
+            builder.endpointOverride(URI.create(endpoint));
+            System.out.println("Using local DynamoDB at: " + endpoint);
+        }
+
+        this.dynamoDb = builder.build();
         this.priceService = new Coingecko(httpClient);
         this.alertRepository = new AlertRepository(alertsTable, dynamoDb);
     }

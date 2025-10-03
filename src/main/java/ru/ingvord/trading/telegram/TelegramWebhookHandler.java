@@ -52,7 +52,7 @@ public class TelegramWebhookHandler implements RequestHandler<APIGatewayProxyReq
         
         // Support local development with environment variable
         var builder = DynamoDbClient.builder()
-            .region(Region.US_EAST_1);
+            .region(Region.EU_CENTRAL_1);
         
         String endpoint = System.getenv("DYNAMODB_ENDPOINT");
         if (endpoint != null && !endpoint.isEmpty()) {
