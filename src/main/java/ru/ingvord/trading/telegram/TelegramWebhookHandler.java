@@ -5,10 +5,9 @@ import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import ru.ingvord.trading.repository.AlertRepository;
+import ru.ingvord.trading.repository.SecretRepository;
 import ru.ingvord.trading.service.Coingecko;
-import ru.ingvord.trading.service.PriceService;
 import ru.ingvord.trading.service.TelegramBotCommandService;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
@@ -40,12 +39,14 @@ public class TelegramWebhookHandler implements RequestHandler<APIGatewayProxyReq
     private final HttpClient httpClient;
     private final DynamoDbClient dynamoDb;
     private final TelegramBotCommandService telegramCommandService;
+    private final String telegramBotToken;
+    private final String expectedToken;
 
     {
         Runtime.getRuntime().addShutdownHook(new Thread(this::close));
     }
 
-    public TelegramWebhookHandler() {
+    public TelegramWebhookHandler() throws IOException {
         this.httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .build();
@@ -67,6 +68,8 @@ public class TelegramWebhookHandler implements RequestHandler<APIGatewayProxyReq
                 new Coingecko(httpClient),
                 new AlertRepository(alertsTable, dynamoDb));
 
+        this.telegramBotToken = new SecretRepository().getParameter(System.getenv("TELEGRAM_BOT_TOKEN"));
+        this.expectedToken =  new SecretRepository().getParameter(System.getenv("WEBHOOK_SECRET_TOKEN"));
     }
     
     @Override
@@ -116,8 +119,7 @@ public class TelegramWebhookHandler implements RequestHandler<APIGatewayProxyReq
         httpClient.close();
     }
 
-    private boolean verifyTelegramRequest(APIGatewayProxyRequestEvent input, Context context) {
-        String expectedToken = System.getenv("WEBHOOK_SECRET_TOKEN");
+    private boolean verifyTelegramRequest(APIGatewayProxyRequestEvent input, Context context) throws IOException {
         if (expectedToken == null || expectedToken.isEmpty()) {
             context.getLogger().log("WARNING: No webhook secret configured");
             return true; // Allow in dev
@@ -132,7 +134,6 @@ public class TelegramWebhookHandler implements RequestHandler<APIGatewayProxyReq
     }
 
     private void sendTelegramMessage(long chatId, String message) throws IOException, InterruptedException {
-        var telegramBotToken = System.getenv("TELEGRAM_BOT_TOKEN");
         if (telegramBotToken == null || telegramBotToken.isEmpty()) {
             throw new IllegalStateException("TELEGRAM_BOT_TOKEN is required");
         }

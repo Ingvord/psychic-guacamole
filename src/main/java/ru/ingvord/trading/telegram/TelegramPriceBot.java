@@ -5,6 +5,7 @@ import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.ScheduledEvent;
 import ru.ingvord.trading.repository.AlertRepository;
 import ru.ingvord.trading.repository.PriceAlert;
+import ru.ingvord.trading.repository.SecretRepository;
 import ru.ingvord.trading.service.Coingecko;
 import ru.ingvord.trading.service.PriceService;
 import software.amazon.awssdk.regions.Region;
@@ -36,17 +37,13 @@ public class TelegramPriceBot implements RequestHandler<ScheduledEvent, String>,
     private final PriceService priceService;
     private final AlertRepository alertRepository;
 
-    private final String alertsTable;
     private final String botApiToken;
     private final HttpClient httpClient;
     private final DynamoDbClient dynamoDb;
 
-    {
-        alertsTable = System.getenv("ALERTS_TABLE");
-        botApiToken = System.getenv("TELEGRAM_BOT_TOKEN");
-    }
+    public TelegramPriceBot() throws IOException {
+        this.botApiToken = new SecretRepository().getParameter(System.getenv("TELEGRAM_BOT_TOKEN"));
 
-    public TelegramPriceBot() {
         this.httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .build();
@@ -61,6 +58,7 @@ public class TelegramPriceBot implements RequestHandler<ScheduledEvent, String>,
             System.out.println("Using local DynamoDB at: " + endpoint);
         }
 
+        String alertsTable = System.getenv("ALERTS_TABLE");
         this.dynamoDb = builder.build();
         this.priceService = new Coingecko(httpClient);
         this.alertRepository = new AlertRepository(alertsTable, dynamoDb);
