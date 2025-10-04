@@ -1,0 +1,16 @@
+[
+  {
+    "name": "ru.ingvord.trading.telegram.TelegramWebhookHandler",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
+  },
+  {
+    "name": "ru.ingvord.trading.telegram.TelegramPriceBot",
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true
+  }
+]

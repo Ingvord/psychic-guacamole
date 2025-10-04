@@ -94,6 +94,11 @@ aws iam attach-role-policy \
     --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 ```
 
+```bash
+aws iam attach-role-policy \
+  --role-name telegram-price-bot-lambda-role \
+  --policy-arn arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+````
 
 3. Get ARN
 
