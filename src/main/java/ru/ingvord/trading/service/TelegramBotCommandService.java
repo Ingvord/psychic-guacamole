@@ -107,12 +107,14 @@ public class TelegramBotCommandService {
                 String symbol = alert.symbol();
                 double minPrice = alert.targetPriceMin().doubleValue();
                 double maxPrice = alert.targetPriceMax().doubleValue();
+                String status = alert.status();
 
                 response.append(String.format(
                         "🔔 **%s**\n" +
                                 "   Range: $%.2f - $%.2f\n" +
-                                "   ID: `%s`\n\n",
-                        symbol, minPrice, maxPrice, alertId.substring(0, 8)
+                                "   ID: `%s`\n\n" +
+                                "   Status: `%s`\n\n",
+                        symbol, minPrice, maxPrice, alertId.substring(0, 8), status
                 ));
             }
 
