@@ -144,6 +144,12 @@ aws lambda update-function-code \
 --zip-file fileb://$JAR_FILE
 ```
 
+Suspend existing lambda:
+
+```bash
+aws lambda put-function-concurrency --function-name telegram-price-bot-frontend --reserved-concurrent-executions 0
+```
+
 5. Create a rule that triggers every 15 minutes
 
 ```bash

@@ -2,8 +2,8 @@ package ru.ingvord.trading.telegram;
 
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
-import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
-import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
+import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPEvent;
+import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import ru.ingvord.trading.repository.AlertRepository;
 import ru.ingvord.trading.repository.SecretRepository;
@@ -19,6 +19,8 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.*;
 
+import static ru.ingvord.trading.environment.Variables.*;
+
 /**
  * Telegram Webhook Handler for Bot Commands
  * 
@@ -33,7 +35,7 @@ import java.util.*;
  * /clear - Remove all alerts for user
  * /price <symbol> - Get current price
  */
-public class TelegramWebhookHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent>, AutoCloseable {
+public class TelegramWebhookHandler implements RequestHandler<APIGatewayV2HTTPEvent, APIGatewayV2HTTPResponse>, AutoCloseable {
     public static final String BOT_NAME = "AdeptConstructionTechnicianBot";
 
     private final HttpClient httpClient;
@@ -55,25 +57,25 @@ public class TelegramWebhookHandler implements RequestHandler<APIGatewayProxyReq
         var builder = DynamoDbClient.builder()
             .region(Region.EU_CENTRAL_1);
         
-        String endpoint = System.getenv("DYNAMODB_ENDPOINT");
+        String endpoint = DYNAMODB_ENDPOINT;
         if (endpoint != null && !endpoint.isEmpty()) {
             builder.endpointOverride(URI.create(endpoint));
             System.out.println("Using local DynamoDB at: " + endpoint);
         }
 
-        String alertsTable = Optional.ofNullable(System.getenv("ALERTS_TABLE")).orElse("price-alerts-local");
+        String alertsTable = Optional.ofNullable(ALERTS_TABLE).orElse("price-alerts-local");
 
         this.dynamoDb = builder.build();
         this.telegramCommandService = new TelegramBotCommandService(
                 new Coingecko(httpClient),
                 new AlertRepository(alertsTable, dynamoDb));
 
-        this.telegramBotToken = new SecretRepository().getParameter(System.getenv("TELEGRAM_BOT_TOKEN"));
-        this.expectedToken =  new SecretRepository().getParameter(System.getenv("WEBHOOK_SECRET_TOKEN"));
+        this.telegramBotToken = new SecretRepository().getParameter(TELEGRAM_BOT_TOKEN);
+        this.expectedToken =  new SecretRepository().getParameter(WEBHOOK_SECRET_TOKEN);
     }
     
     @Override
-    public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent input, Context context) {
+    public APIGatewayV2HTTPResponse handleRequest(APIGatewayV2HTTPEvent input, Context context) {
         try {
             context.getLogger().log("Received webhook.");
             var verified = verifyTelegramRequest(input, context);
@@ -102,8 +104,8 @@ public class TelegramWebhookHandler implements RequestHandler<APIGatewayProxyReq
         }
     }
     
-    private APIGatewayProxyResponseEvent createResponse(int statusCode, String body) {
-        APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent();
+    private APIGatewayV2HTTPResponse createResponse(int statusCode, String body) {
+        var response = new APIGatewayV2HTTPResponse();
         response.setStatusCode(statusCode);
         response.setBody(body);
         response.setHeaders(Map.of(
@@ -119,7 +121,7 @@ public class TelegramWebhookHandler implements RequestHandler<APIGatewayProxyReq
         httpClient.close();
     }
 
-    private boolean verifyTelegramRequest(APIGatewayProxyRequestEvent input, Context context) throws IOException {
+    private boolean verifyTelegramRequest(APIGatewayV2HTTPEvent input, Context context) throws IOException {
         if (expectedToken == null || expectedToken.isEmpty()) {
             context.getLogger().log("WARNING: No webhook secret configured");
             return true; // Allow in dev
@@ -140,7 +142,7 @@ public class TelegramWebhookHandler implements RequestHandler<APIGatewayProxyReq
         new SendMessage(telegramBotToken, String.valueOf(chatId), message).execute();
     }
 
-    private String getHeaderCaseInsensitive(APIGatewayProxyRequestEvent input, String header) {
+    private String getHeaderCaseInsensitive(APIGatewayV2HTTPEvent input, String header) {
         return Optional.ofNullable(input.getHeaders().get(header))
                 .orElse(input.getHeaders().get(header.toLowerCase()));
     }

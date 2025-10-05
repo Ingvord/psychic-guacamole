@@ -20,6 +20,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
+import static ru.ingvord.trading.environment.Variables.*;
 import static ru.ingvord.trading.repository.AlertRepository.ALERT_STATUS_ACTIVE;
 import static ru.ingvord.trading.repository.AlertRepository.ALERT_STATUS_TRIGGERED;
 
@@ -42,7 +43,7 @@ public class TelegramPriceBot implements RequestHandler<ScheduledEvent, String>,
     private final DynamoDbClient dynamoDb;
 
     public TelegramPriceBot() throws IOException {
-        this.botApiToken = new SecretRepository().getParameter(System.getenv("TELEGRAM_BOT_TOKEN"));
+        this.botApiToken = new SecretRepository().getParameter(TELEGRAM_BOT_TOKEN);
 
         this.httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
@@ -52,16 +53,15 @@ public class TelegramPriceBot implements RequestHandler<ScheduledEvent, String>,
         var builder = DynamoDbClient.builder()
                 .region(Region.EU_CENTRAL_1);
 
-        String endpoint = System.getenv("DYNAMODB_ENDPOINT");
+        String endpoint = DYNAMODB_ENDPOINT;
         if (endpoint != null && !endpoint.isEmpty()) {
             builder.endpointOverride(URI.create(endpoint));
             System.out.println("Using local DynamoDB at: " + endpoint);
         }
 
-        String alertsTable = System.getenv("ALERTS_TABLE");
         this.dynamoDb = builder.build();
         this.priceService = new Coingecko(httpClient);
-        this.alertRepository = new AlertRepository(alertsTable, dynamoDb);
+        this.alertRepository = new AlertRepository(ALERTS_TABLE, dynamoDb);
     }
     
     @Override

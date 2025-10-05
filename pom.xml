@@ -19,15 +19,15 @@
         <maven.compiler.target>21</maven.compiler.target>
         
         <!-- Dependency Versions -->
-        <aws.java.sdk.version>2.21.29</aws.java.sdk.version>
+        <aws.java.sdk.version>2.28.7</aws.java.sdk.version>
         <aws.lambda.java.core.version>1.4.0</aws.lambda.java.core.version>
         <aws.lambda.java.events.version>3.16.1</aws.lambda.java.events.version>
         <jackson.version>2.16.1</jackson.version>
-        <slf4j.version>2.0.9</slf4j.version>
+        <slf4j.version>2.0.13</slf4j.version>
         <junit.version>5.10.1</junit.version>
         
         <!-- Native Image Configuration -->
-        <native.maven.plugin.version>0.10.1</native.maven.plugin.version>
+        <native.maven.plugin.version>0.10.2</native.maven.plugin.version>
         <imageName>telegram-bot</imageName>
     </properties>
 
@@ -38,6 +38,13 @@
                 <groupId>software.amazon.awssdk</groupId>
                 <artifactId>bom</artifactId>
                 <version>${aws.java.sdk.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.amazonaws</groupId>
+                <artifactId>aws-xray-recorder-sdk-bom</artifactId>
+                <version>2.17.0</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -59,21 +66,80 @@
             <version>${aws.lambda.java.events.version}</version>
         </dependency>
 
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-lambda-java-runtime-interface-client</artifactId>
+            <version>2.5.1</version>
+        </dependency>
+
         <!-- AWS SDK - DynamoDB -->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>dynamodb</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>netty-nio-client</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>apache-client</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>ssm</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>netty-nio-client</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>apache-client</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>aws-crt-client</artifactId>
         </dependency>
 
         <dependency>
             <groupId>org.telegram</groupId>
             <artifactId>telegrambots</artifactId>
             <version>6.0.1</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.graalvm.sdk</groupId>
+            <artifactId>nativeimage</artifactId>
+            <version>24.0.2</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-xray-recorder-sdk-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-xray-recorder-sdk-apache-http</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-xray-recorder-sdk-aws-sdk</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-xray-recorder-sdk-aws-sdk-instrumentor</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-xray-recorder-sdk-aws-sdk-v2</artifactId>
         </dependency>
 
         <!-- Jackson for JSON processing -->
@@ -157,26 +223,15 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>3.5.1</version>
+                <version>3.6.0</version>
                 <configuration>
-                    <createDependencyReducedPom>false</createDependencyReducedPom>
                     <transformers>
-                        <!-- Don't set a default main class - Lambda uses handlers -->
                         <!-- Handle duplicate files in META-INF -->
-                        <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
-                        <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer"/>
-                        <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheNoticeResourceTransformer"/>
+                        <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                            <mainClass>com.amazonaws.services.lambda.runtime.api.client.AWSLambda</mainClass>
+                        </transformer>
                     </transformers>
-                    <filters>
-                        <filter>
-                            <artifact>*:*</artifact>
-                            <excludes>
-                                <exclude>META-INF/*.SF</exclude>
-                                <exclude>META-INF/*.DSA</exclude>
-                                <exclude>META-INF/*.RSA</exclude>
-                            </excludes>
-                        </filter>
-                    </filters>
+                    <shadedArtifactAttached>true</shadedArtifactAttached>
                 </configuration>
                 <executions>
                     <execution>
@@ -195,19 +250,6 @@
         <profile>
             <id>native</id>
 
-            <dependencies>
-                <!-- AWS SDK - URL Connection Client (smaller footprint for native image) -->
-                <dependency>
-                    <groupId>software.amazon.awssdk</groupId>
-                    <artifactId>url-connection-client</artifactId>
-                </dependency>
-                <dependency>
-                    <groupId>com.amazonaws</groupId>
-                    <artifactId>aws-lambda-java-runtime-interface-client</artifactId>
-                    <version>2.8.6</version>
-                </dependency>
-            </dependencies>
-
             <build>
                 <plugins>
                     <!-- GraalVM Native Image Plugin -->
@@ -216,19 +258,48 @@
                         <artifactId>native-maven-plugin</artifactId>
                         <version>${native.maven.plugin.version}</version>
                         <extensions>true</extensions>
+                        <executions>
+                            <execution>
+                                <id>build-native</id>
+                                <goals>
+                                    <goal>build</goal>
+                                </goals>
+                                <phase>package</phase>
+                            </execution>
+                        </executions>
                         <configuration>
                             <imageName>psychic-guacamole</imageName>
                             <mainClass>com.amazonaws.services.lambda.runtime.api.client.AWSLambda</mainClass>
                             <buildArgs>
-                                <buildArg>--no-fallback</buildArg>
                                 <buildArg>--enable-url-protocols=https,http</buildArg>
-                                <buildArg>--initialize-at-build-time=org.slf4j,com.fasterxml.jackson</buildArg>
-                                <buildArg>--initialize-at-run-time=io.netty</buildArg>
+                                <buildArg>--initialize-at-run-time=ru.ingvord.trading.environment.Variables</buildArg>
                                 <buildArg>-H:+ReportExceptionStackTraces</buildArg>
                                 <buildArg>-H:+PrintClassInitialization</buildArg>
                                 <buildArg>--verbose</buildArg>
                             </buildArgs>
                         </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-assembly-plugin</artifactId>
+                        <version>3.7.1</version>
+                        <executions>
+                            <execution>
+                                <id>zip-assembly</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>single</goal>
+                                </goals>
+                                <configuration>
+                                    <finalName>function</finalName>
+                                    <descriptors>
+                                        <descriptor>src/assembly/zip.xml</descriptor>
+                                    </descriptors>
+                                    <attach>false</attach>
+                                    <appendAssemblyId>false</appendAssemblyId>
+                                </configuration>
+                            </execution>
+                        </executions>
                     </plugin>
                 </plugins>
             </build>

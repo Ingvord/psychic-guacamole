@@ -1,0 +1,29 @@
+<assembly xmlns="http://maven.apache.org/ASSEMBLY/2.1.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/ASSEMBLY/2.1.0 http://maven.apache.org/xsd/assembly-2.1.0.xsd">
+    <id>lambda-package</id>
+    <formats>
+        <format>zip</format>
+    </formats>
+    <includeBaseDirectory>false</includeBaseDirectory>
+    <files>
+        <file>
+            <source>${project.build.directory}/psychic-guacamole</source>
+            <outputDirectory>/</outputDirectory>
+            <destName>psychic-guacamole</destName>
+            <fileMode>777</fileMode>
+        </file>
+        <file>
+            <source>bootstrap</source>
+            <outputDirectory>/</outputDirectory>
+            <destName>bootstrap</destName>
+            <fileMode>777</fileMode>
+        </file>
+        <file>
+            <source>${project.build.directory}/libaws-crt-jni.so</source>
+            <outputDirectory>${file.separator}</outputDirectory>
+            <destName>libaws-crt-jni.so</destName>
+            <fileMode>777</fileMode>
+        </file>
+    </files>
+</assembly>

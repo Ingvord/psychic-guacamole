@@ -1,0 +1,5 @@
+#!/bin/bash
+
+cd ${LAMBDA_TASK_ROOT:-.}
+
+ ./psychic-guacamole $_HANDLER

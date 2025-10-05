@@ -1,0 +1,9 @@
+{
+  "resources": {
+    "includes": [
+      {
+        "pattern": "libaws-lambda-jni\\..*\\.so"
+      }
+    ]
+  }
+}

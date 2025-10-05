@@ -1,0 +1,35 @@
+#FROM public.ecr.aws/amazonlinux/amazonlinux:2023 AS builder
+#
+## Install build dependencies
+#RUN yum install -y gcc glibc-devel zlib-devel tar gzip maven
+#
+## Install GraalVM
+#RUN mkdir -p /opt/graalvm-jdk-21 && \
+#    curl -L https://download.oracle.com/graalvm/21/latest/graalvm-jdk-21_linux-x64_bin.tar.gz | \
+#    tar xz -C /opt/graalvm-jdk-21 --strip-components=1
+#
+#ENV JAVA_HOME=/opt/graalvm-jdk-21
+#ENV PATH=$JAVA_HOME/bin:$PATH
+#
+## Copy project files
+#WORKDIR /build
+#COPY pom.xml .
+#COPY src ./src
+#COPY bootstrap ./bootstrap
+#
+## Build JAR
+#RUN mvn clean native:compile-no-fork -DskipTests -Pnative
+#
+## Create zip package inside Docker
+#RUN chmod +x target/psychic-guacamole bootstrap && \
+#    zip -j function.zip bootstrap target/psychic-guacamole
+
+# Final stage
+#FROM scratch
+#COPY --from=builder /build/function.zip /function.zip
+
+FROM public.ecr.aws/lambda/provided:al2023
+COPY target/psychic-guacamole /var/runtime/bootstrap
+RUN chmod +x /var/runtime/bootstrap
+# If your RIC needs the handler FQN:
+CMD [ "ru.ingvord.trading.telegram.TelegramWebhookHandler::handleRequest" ]
