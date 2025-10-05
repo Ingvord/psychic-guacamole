@@ -34,7 +34,7 @@ public class AlertRepository {
         UpdateItemRequest updateRequest = UpdateItemRequest.builder()
                 .tableName(alertsTable)
                 .key(Map.of("alertId", AttributeValue.builder().s(alertId).build()))
-                .updateExpression("SET alertStatus = :status")
+                .updateExpression("SET status = :status")
                 .expressionAttributeValues(Map.of(
                         ":status", AttributeValue.builder().s(status).build()
                 ))
