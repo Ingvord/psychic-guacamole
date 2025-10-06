@@ -53,6 +53,10 @@ public class SetupLocalDBSchema {
                             AttributeDefinition.builder()
                                     .attributeName("chatId")
                                     .attributeType(ScalarAttributeType.S)
+                                    .build(),
+                            AttributeDefinition.builder()
+                                    .attributeName("status")
+                                    .attributeType(ScalarAttributeType.S)
                                     .build()
                     )
                     .keySchema(
