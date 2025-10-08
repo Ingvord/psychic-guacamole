@@ -16,10 +16,10 @@ Resources:
       Runtime: java21
       Environment:
         Variables:
-          TELEGRAM_BOT_TOKEN: 8317511591:AAFoVpiZPUN-qcOQQIQnZMqJ_5OG4yl-TlU
-          WEBHOOK_SECRET_TOKEN: MTc1OTQ5Nzg4OA
-          ALERTS_TABLE: price-alerts-local
-          DYNAMODB_ENDPOINT: http://dynamodb-local:8000
+          TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+          WEBHOOK_SECRET_TOKEN: ${WEBHOOK_SECRET_TOKEN}
+          ALERTS_TABLE: ${WEBHOOK_SECRET_TOKEN}
+          DYNAMODB_ENDPOINT: ${DYNAMODB_ENDPOINT}
           JAVA_TOOL_OPTIONS: -agentlib:native-image-agent=config-merge-dir=/var/task/src/main/resources/META-INF/native-image
       Events:
         Webhook:
@@ -29,23 +29,23 @@ Resources:
             Method: POST
 
 
-  TelegramWebhookFunctionNative:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: target/function.zip
-      Runtime: provided.al2023
-      Timeout: 10
-      MemorySize: 256
-      Handler: ru.ingvord.trading.telegram.TelegramWebhookHandler::handleRequest
-      Environment:
-        Variables:
-          TELEGRAM_BOT_TOKEN: 8317511591:AAFoVpiZPUN-qcOQQIQnZMqJ_5OG4yl-TlU
-          WEBHOOK_SECRET_TOKEN: MTc1OTQ5Nzg4OA
-          ALERTS_TABLE: price-alerts-local
-          DYNAMODB_ENDPOINT: http://dynamodb-local:8000
-      Events:
-        Webhook:
-          Type: HttpApi
-          Properties:
-            Path: /webhook
-            Method: POST
+#  TelegramWebhookFunctionNative:
+#    Type: AWS::Serverless::Function
+#    Properties:
+#      CodeUri: target/function.zip
+#      Runtime: provided.al2023
+#      Timeout: 10
+#      MemorySize: 256
+#      Handler: ru.ingvord.trading.telegram.TelegramWebhookHandler::handleRequest
+#      Environment:
+#        Variables:
+#          TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+#          WEBHOOK_SECRET_TOKEN: ${WEBHOOK_SECRET_TOKEN}
+#          ALERTS_TABLE: ${WEBHOOK_SECRET_TOKEN}
+#          DYNAMODB_ENDPOINT: ${DYNAMODB_ENDPOINT}
+#      Events:
+#        Webhook:
+#          Type: HttpApi
+#          Properties:
+#            Path: /webhook
+#            Method: POST
