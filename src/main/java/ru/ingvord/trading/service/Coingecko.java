@@ -59,7 +59,7 @@ public class Coingecko implements PriceService {
         }
 
         JsonNode jsonNode = objectMapper.readTree(response.body());
-        JsonNode priceNode = jsonNode.get(symbol.toLowerCase());
+        JsonNode priceNode = jsonNode.get(coingeckoId.toLowerCase());
 
         if (priceNode == null || !priceNode.has("usd")) {
             throw new IOException("Price not found for symbol: " + symbol +
