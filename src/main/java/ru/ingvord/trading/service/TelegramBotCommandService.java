@@ -66,11 +66,40 @@ public class TelegramBotCommandService {
         }
 
         String symbol = matcher.group(1).toLowerCase();
-        BigDecimal minPrice = new BigDecimal(matcher.group(2));
-        BigDecimal maxPrice = new BigDecimal(matcher.group(3));
+        BigDecimal minPrice;
+        BigDecimal maxPrice;
+        try {
+            minPrice = new BigDecimal(matcher.group(2));
+            maxPrice = new BigDecimal(matcher.group(3));
+        } catch (NumberFormatException e) {
+            return "❌ Invalid price format! Use numbers like: 40000 or 40000.50";
+        }
+
+
+        if (minPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            return "❌ Minimum price must be greater than zero!";
+        }
+
+        if (maxPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            return "❌ Maximum price must be greater than zero!";
+        }
 
         if (minPrice.compareTo(maxPrice) >= 0) {
             return "❌ Minimum price must be less than maximum price!";
+        }
+
+        // Sanity check: reasonable price range
+        BigDecimal MAX_REASONABLE_PRICE = new BigDecimal("10000000"); // $10M per coin
+        if (minPrice.compareTo(MAX_REASONABLE_PRICE) > 0 ||
+                maxPrice.compareTo(MAX_REASONABLE_PRICE) > 0) {
+            return "❌ Price values seem unreasonably high. Please check your input.";
+        }
+
+        // Sanity check: min/max shouldn't be too close (at least 1% difference)
+        BigDecimal difference = maxPrice.subtract(minPrice);
+        BigDecimal onePercent = minPrice.multiply(new BigDecimal("0.01"));
+        if (difference.compareTo(onePercent) < 0) {
+            return "❌ Price range too narrow! Min and max should differ by at least 1%.";
         }
 
         try {
