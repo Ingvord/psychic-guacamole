@@ -10,6 +10,7 @@ aws ssm put-parameter \
     --name "/telegram-bot/token" \
     --value "YOUR_BOT_TOKEN_HERE" \
     --type SecureString \
+    --overwrite \
     --description "Telegram bot token for price alerts"
 ```
 
@@ -18,6 +19,7 @@ aws ssm put-parameter \
     --name "/telegram-bot/webhook-secret" \
     --value "YOUR_WEBHOOK_SECRET_HERE" \
     --type SecureString \
+    --overwrite \
     --description "Telegram bot webhook secret for price alerts"
 ```
 
