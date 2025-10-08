@@ -22,6 +22,7 @@ public class TelegramBotCommandService {
     private static final Pattern ALERT_PATTERN = Pattern.compile("/alert\\s+(\\w+)\\s+([\\d.]+)\\s+([\\d.]+)");
     private static final Pattern PRICE_PATTERN = Pattern.compile("/price\\s+(\\w+)");
     private static final Pattern REMOVE_PATTERN = Pattern.compile("/remove\\s+(\\w+)");
+    public static final int MAX_ALERTS_PER_USER = 20;
 
     private final PriceService priceService;
     private final AlertRepository alertRepository;
@@ -64,6 +65,26 @@ public class TelegramBotCommandService {
         if (!matcher.matches()) {
             return TelegramBotMessages.INVALID_ALERT;
         }
+
+        // Check user's existing alert count
+        try {
+            List<PriceAlert> existingAlerts = getUserAlerts(chatId);
+            if (existingAlerts.size() >= MAX_ALERTS_PER_USER) {
+                return String.format(
+                        "❌ **Alert Limit Reached**\n\n" +
+                                "You have %d/%d alerts (maximum reached).\n\n" +
+                                "Please remove some alerts before creating new ones:\n" +
+                                "• Use `/list` to see your alerts\n" +
+                                "• Use `/remove <alert_id>` to remove specific alerts\n" +
+                                "• Use `/clear` to remove all alerts",
+                        existingAlerts.size(), MAX_ALERTS_PER_USER
+                );
+            }
+        } catch (Exception e) {
+            context.getLogger().log("Error checking alert count: " + e.getMessage());
+            // Continue anyway - better to allow than block on error
+        }
+
 
         String symbol = matcher.group(1).toLowerCase();
         BigDecimal minPrice;
