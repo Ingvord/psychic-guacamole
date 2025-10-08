@@ -41,7 +41,9 @@ public class Coingecko implements PriceService {
      * @throws IOException If price fetch fails
      */
     public BigDecimal getCurrentPrice(String symbol) throws IOException, InterruptedException {
-        String url = COINGECKO_API + "?ids=" + symbol.toLowerCase() + "&vs_currencies=usd";
+        // Convert to CoinGecko ID if it's a ticker
+        String coingeckoId = TickerMapper.toCoinGeckoId(symbol);
+        String url = COINGECKO_API + "?ids=" + coingeckoId + "&vs_currencies=usd";
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
@@ -80,55 +82,6 @@ public class Coingecko implements PriceService {
         } catch (Exception e) {
             return false;
         }
-    }
-
-    /**
-     * Get price with fallback for common ticker symbols
-     * Converts common ticker symbols to CoinGecko IDs
-     *
-     * @param symbol Cryptocurrency symbol or ID
-     * @return Current price in USD
-     * @throws IOException If price fetch fails
-     */
-    public BigDecimal getPriceWithFallback(String symbol) throws IOException, InterruptedException {
-        // Try direct lookup first
-        try {
-            return getCurrentPrice(symbol);
-        } catch (IOException e) {
-            // Try converting common ticker symbols to CoinGecko IDs
-            String coinGeckoId = convertToCoinGeckoId(symbol);
-            if (coinGeckoId != null && !coinGeckoId.equals(symbol.toLowerCase())) {
-                return getCurrentPrice(coinGeckoId);
-            }
-            throw e;
-        }
-    }
-
-    /**
-     * Convert common ticker symbols to CoinGecko IDs
-     *
-     * @param symbol Ticker symbol (e.g., "BTC", "ETH")
-     * @return CoinGecko ID (e.g., "bitcoin", "ethereum") or null if not found
-     */
-    private String convertToCoinGeckoId(String symbol) {
-        return switch (symbol.toUpperCase()) {
-            case "BTC" -> "bitcoin";
-            case "ETH" -> "ethereum";
-            case "ADA" -> "cardano";
-            case "SOL" -> "solana";
-            case "DOGE" -> "dogecoin";
-            case "XRP" -> "ripple";
-            case "DOT" -> "polkadot";
-            case "AVAX" -> "avalanche-2";
-            case "LINK" -> "chainlink";
-            case "MATIC" -> "matic-network";
-            case "UNI" -> "uniswap";
-            case "ATOM" -> "cosmos";
-            case "LTC" -> "litecoin";
-            case "BCH" -> "bitcoin-cash";
-            case "ALGO" -> "algorand";
-            default -> symbol.toLowerCase();
-        };
     }
 
 }

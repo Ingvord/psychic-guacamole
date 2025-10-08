@@ -43,6 +43,8 @@ public class TelegramBotCommandService {
             return TelegramBotMessages.WELCOME;
         } else if (text.startsWith("/help")) {
             return TelegramBotMessages.HELP;
+        } else if (text.startsWith("/tickers")) {
+            return handleTickersCommand();
         } else if (text.startsWith("/alert")) {
             return handleAlertCommand(chatId, text, context);
         } else if (text.startsWith("/list")) {
@@ -58,6 +60,14 @@ public class TelegramBotCommandService {
         }
 
         return null; // Don't respond to non-commands
+    }
+
+    private String handleTickersCommand() {
+        return "💎 **Supported Cryptocurrencies**\n\n" +
+                TickerMapper.getAllTickersMessage() +
+                "\n\n💡 **Usage:**\n" +
+                "• `/price BTC` - Check Bitcoin price\n" +
+                "• `/alert ETH 2000 3000` - Set Ethereum alert";
     }
 
     private String handleAlertCommand(long chatId, String text, Context context) {
