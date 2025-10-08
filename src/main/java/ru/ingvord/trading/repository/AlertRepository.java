@@ -55,36 +55,69 @@ public class AlertRepository {
     }
 
     public List<PriceAlert> findByChatId(long chatId){
-        QueryRequest queryRequest = QueryRequest.builder()
-                .tableName(alertsTable)
-                .indexName("ChatIdIndex")
-                .keyConditionExpression("chatId = :chatId")
-                .filterExpression("attribute_not_exists(#status) OR #status = :status")
-                .expressionAttributeNames(Map.of("#status", "status"))
-                .expressionAttributeValues(Map.of(
-                        ":chatId", AttributeValue.builder().s(String.valueOf(chatId)).build(),
-                        ":status", AttributeValue.builder().s("ACTIVE").build()
-                ))
-                .build();
+        List<PriceAlert> allAlerts = new ArrayList<>();
+        Map<String, AttributeValue> lastEvaluatedKey = null;
 
-        QueryResponse response = dynamoDb.query(queryRequest);
-        return response.items().stream()
-                .map(PriceAlert::fromDynamoItem).toList();
+        do {
+            QueryRequest.Builder builder = QueryRequest.builder()
+                    .tableName(alertsTable)
+                    .indexName("ChatIdIndex")
+                    .keyConditionExpression("chatId = :chatId")
+                    .filterExpression("attribute_not_exists(#status) OR #status = :status")
+                    .expressionAttributeNames(Map.of("#status", "status"))
+                    .expressionAttributeValues(Map.of(
+                            ":chatId", AttributeValue.builder().s(String.valueOf(chatId)).build(),
+                            ":status", AttributeValue.builder().s("ACTIVE").build()
+                    ));
+
+            if (lastEvaluatedKey != null && !lastEvaluatedKey.isEmpty()) {
+                builder.exclusiveStartKey(lastEvaluatedKey);
+            }
+
+            QueryResponse response = dynamoDb.query(builder.build());
+            allAlerts.addAll(response.items().stream()
+                    .map(PriceAlert::fromDynamoItem)
+                    .toList());
+
+            lastEvaluatedKey = response.lastEvaluatedKey();
+
+        } while (lastEvaluatedKey != null && !lastEvaluatedKey.isEmpty());
+
+        return allAlerts;
     }
 
     public List<PriceAlert> findByStatus(String status) {
-        QueryRequest request = QueryRequest.builder()
-                .tableName(alertsTable)
-                .indexName("StatusIndex") // Need to create this GSI
-                .keyConditionExpression("#status = :status")
-                .expressionAttributeNames(Map.of("#status", "status"))
-                .expressionAttributeValues(Map.of(
-                        ":status", AttributeValue.builder().s(status).build()
-                ))
-                .build();
+        List<PriceAlert> allAlerts = new ArrayList<>();
+        Map<String, AttributeValue> lastEvaluatedKey = null;
 
-        return dynamoDb.query(request).items().stream()
-                .map(PriceAlert::fromDynamoItem).toList();
+        do {
+            QueryRequest.Builder builder = QueryRequest.builder()
+                    .tableName(alertsTable)
+                    .indexName("StatusIndex")
+                    .keyConditionExpression("#status = :status")
+                    .expressionAttributeNames(Map.of("#status", "status"))
+                    .expressionAttributeValues(Map.of(
+                            ":status", AttributeValue.builder().s(status).build()
+                    ));
+
+            // Add pagination key if exists
+            if (lastEvaluatedKey != null && !lastEvaluatedKey.isEmpty()) {
+                builder.exclusiveStartKey(lastEvaluatedKey);
+            }
+
+            QueryResponse response = dynamoDb.query(builder.build());
+
+            // Add results to list
+            allAlerts.addAll(response.items().stream()
+                    .map(PriceAlert::fromDynamoItem)
+                    .toList());
+
+            // Get next page key
+            lastEvaluatedKey = response.lastEvaluatedKey();
+
+        } while (lastEvaluatedKey != null && !lastEvaluatedKey.isEmpty());
+
+        return allAlerts;
     }
 
     public void delete(String alertId){
