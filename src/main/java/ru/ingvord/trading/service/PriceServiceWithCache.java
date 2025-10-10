@@ -3,7 +3,10 @@ package ru.ingvord.trading.service;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class PriceServiceWithCache implements PriceService {
@@ -32,11 +35,40 @@ public class PriceServiceWithCache implements PriceService {
 
         // Fetch fresh price
         BigDecimal price = delegate.getCurrentPrice(symbol);
-        cache.putIfAbsent(symbol, new CachedPrice(price, Instant.now()));
+        cache.put(symbol, new CachedPrice(price, Instant.now()));
 
         return price;
     }
 
+    @Override
+    public Map<String, BigDecimal> getPrices(Set<String> symbols) throws IOException, InterruptedException {
+        Map<String, BigDecimal> result = new HashMap<>();
+        Set<String> symbolsToFetch = new HashSet<>();
+
+        // Check cache first
+        for (String symbol : symbols) {
+            CachedPrice cached = cache.get(symbol);
+            if (cached != null && !cached.isExpired(cacheTtlSeconds)) {
+                result.put(symbol, cached.price);
+            } else {
+                symbolsToFetch.add(symbol);
+            }
+        }
+
+        // Fetch missing prices in batch
+        if (!symbolsToFetch.isEmpty()) {
+            Map<String, BigDecimal> freshPrices = delegate.getPrices(symbolsToFetch);
+
+            // Update cache and result
+            Instant now = Instant.now();
+            freshPrices.forEach((symbol, price) -> {
+                cache.put(symbol, new CachedPrice(price, now));
+                result.put(symbol, price);
+            });
+        }
+
+        return result;
+    }
 
     private record CachedPrice(BigDecimal price, Instant timestamp) {
         boolean isExpired(long ttlSeconds) {

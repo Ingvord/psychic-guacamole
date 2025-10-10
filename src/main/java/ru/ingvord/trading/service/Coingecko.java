@@ -11,6 +11,9 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Price Service - Fetches cryptocurrency prices from CoinGecko
@@ -67,6 +70,52 @@ public class Coingecko implements PriceService {
         }
 
         return new BigDecimal(priceNode.get("usd").asText()).setScale(PRICE_SCALE, RoundingMode.HALF_UP);
+    }
+
+    @Override
+    public Map<String, BigDecimal> getPrices(Set<String> symbols) throws IOException, InterruptedException {
+        if (symbols == null || symbols.isEmpty()) {
+            return Map.of();
+        }
+
+        // Convert all symbols to CoinGecko IDs
+        Set<String> coingeckoIds = symbols.stream()
+                .map(TickerMapper::toCoinGeckoId)
+                .collect(Collectors.toSet());
+
+        // CoinGecko supports comma-separated IDs: ?ids=bitcoin,ethereum,solana
+        String ids = String.join(",", coingeckoIds);
+        String url = COINGECKO_API + "?ids=" + ids + "&vs_currencies=usd";
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Accept", "application/json")
+                .timeout(Duration.ofSeconds(10))
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request,
+                HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() != 200) {
+            throw new IOException("CoinGecko batch API request failed with status: " + response.statusCode());
+        }
+
+        JsonNode jsonNode = objectMapper.readTree(response.body());
+
+        Map<String, BigDecimal> prices = new java.util.HashMap<>();
+
+        // Parse each coin's price
+        for (String coingeckoId : coingeckoIds) {
+            JsonNode priceNode = jsonNode.get(coingeckoId);
+
+            if (priceNode != null && priceNode.has("usd")) {
+                BigDecimal price = new BigDecimal(priceNode.get("usd").asText())
+                        .setScale(PRICE_SCALE, RoundingMode.HALF_UP);
+                prices.put(TickerMapper.getCoinInfo(coingeckoId).ticker(), price);
+            }
+        }
+
+        return prices;
     }
 
     /**
