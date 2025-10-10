@@ -46,7 +46,7 @@ public class TelegramPriceBot implements RequestHandler<ScheduledEvent, String>,
     private final DynamoDbClient dynamoDb;
 
     public TelegramPriceBot() throws IOException {
-        this.botApiToken = new SecretRepository().getParameter(TELEGRAM_BOT_TOKEN);
+        this.botApiToken = TELEGRAM_BOT_TOKEN;
 
         this.httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))

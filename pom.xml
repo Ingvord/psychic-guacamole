@@ -121,26 +121,7 @@
             <scope>provided</scope>
         </dependency>
 
-        <dependency>
-            <groupId>com.amazonaws</groupId>
-            <artifactId>aws-xray-recorder-sdk-core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.amazonaws</groupId>
-            <artifactId>aws-xray-recorder-sdk-apache-http</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.amazonaws</groupId>
-            <artifactId>aws-xray-recorder-sdk-aws-sdk</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.amazonaws</groupId>
-            <artifactId>aws-xray-recorder-sdk-aws-sdk-instrumentor</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.amazonaws</groupId>
-            <artifactId>aws-xray-recorder-sdk-aws-sdk-v2</artifactId>
-        </dependency>
+
 
         <!-- Jackson for JSON processing -->
         <dependency>
@@ -246,6 +227,31 @@
     </build>
 
     <profiles>
+        <profile>
+            <id>xray</id>
+            <dependencies>
+                <dependency>
+                    <groupId>com.amazonaws</groupId>
+                    <artifactId>aws-xray-recorder-sdk-core</artifactId>
+                </dependency>
+                <dependency>
+                    <groupId>com.amazonaws</groupId>
+                    <artifactId>aws-xray-recorder-sdk-apache-http</artifactId>
+                </dependency>
+                <dependency>
+                    <groupId>com.amazonaws</groupId>
+                    <artifactId>aws-xray-recorder-sdk-aws-sdk</artifactId>
+                </dependency>
+                <dependency>
+                    <groupId>com.amazonaws</groupId>
+                    <artifactId>aws-xray-recorder-sdk-aws-sdk-instrumentor</artifactId>
+                </dependency>
+                <dependency>
+                    <groupId>com.amazonaws</groupId>
+                    <artifactId>aws-xray-recorder-sdk-aws-sdk-v2</artifactId>
+                </dependency>
+            </dependencies>
+        </profile>
         <!-- Profile for PriceBot native image -->
         <profile>
             <id>native</id>
