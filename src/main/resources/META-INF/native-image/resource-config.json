@@ -3,6 +3,15 @@
     "includes": [
       {
         "pattern": "libaws-lambda-jni\\..*\\.so"
+      },
+      {
+        "pattern": "com/amazonaws/lambda/thirdparty/org/joda/time/tz/data/ZoneInfoMap"
+      },
+      {
+        "pattern": "com/amazonaws/lambda/thirdparty/org/joda/time/tz/data/Etc/GMT"
+      },
+      {
+        "pattern": "org/joda/time/tz/data/ZoneInfoMap"
       }
     ]
   }
