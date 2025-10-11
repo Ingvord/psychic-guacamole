@@ -80,6 +80,9 @@ public class TracedHttpClient extends HttpClient {
         String host = request.uri().getHost();
         String method = request.method();
 
+        // Sanitize URL to remove sensitive data (bot tokens, API keys, etc.)
+        String sanitizedUrl = sanitizeUrl(url);
+
         // Create subsegment for this HTTP call
         Subsegment subsegment = AWSXRay.beginSubsegment(host);
 
@@ -90,7 +93,7 @@ public class TracedHttpClient extends HttpClient {
             // Add HTTP metadata
             subsegment.putHttp("request", Map.of(
                     "method", method,
-                    "url", url
+                    "url", sanitizedUrl
             ));
 
             // Make the actual HTTP call
@@ -122,6 +125,15 @@ public class TracedHttpClient extends HttpClient {
             // Always end the subsegment
             AWSXRay.endSubsegment();
         }
+    }
+
+    /**
+     * Sanitize URL by removing sensitive information like bot tokens, API keys, etc.
+     *
+     */
+    private String sanitizeUrl(String url) {
+        // Redact Telegram bot tokens (format: /botTOKEN/method)
+        return url.replaceAll("/bot[0-9]+:[A-Za-z0-9_-]+/", "/bot[REDACTED]/");
     }
 
     @Override
