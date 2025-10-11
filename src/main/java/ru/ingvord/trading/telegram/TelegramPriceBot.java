@@ -11,6 +11,7 @@ import ru.ingvord.trading.service.Coingecko;
 import ru.ingvord.trading.service.PriceService;
 import ru.ingvord.trading.service.PriceServiceWithCache;
 import ru.ingvord.trading.service.TickerMapper;
+import ru.ingvord.trading.util.TracedHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 
@@ -20,7 +21,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 import static ru.ingvord.trading.environment.Variables.*;
@@ -48,9 +48,9 @@ public class TelegramPriceBot implements RequestHandler<ScheduledEvent, String>,
     public TelegramPriceBot() throws IOException {
         this.botApiToken = new SecretRepository().getParameter(TELEGRAM_BOT_TOKEN);
 
-        this.httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
-            .build();
+        this.httpClient = new TracedHttpClient(HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(3))
+            .build());
 
         // Support local development with environment variable
         var builder = DynamoDbClient.builder()
@@ -195,7 +195,7 @@ public class TelegramPriceBot implements RequestHandler<ScheduledEvent, String>,
     }
     
     private void sendTelegramMessage(long chatId, String message) throws IOException, InterruptedException {
-        new SendMessage(botApiToken, String.valueOf(chatId), message).execute();
+        new SendMessage(botApiToken, String.valueOf(chatId), message, httpClient).execute();
     }
     
     private void disableAlert(String alertId) {

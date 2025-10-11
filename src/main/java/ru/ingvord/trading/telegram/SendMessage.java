@@ -1,6 +1,7 @@
 package ru.ingvord.trading.telegram;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import ru.ingvord.trading.util.TracedHttpClient;
 
 import java.io.IOException;
 import java.net.URI;
@@ -17,15 +18,14 @@ public class SendMessage {
     private final String chatId;
     private final String message;
 
-    private final HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(3))
-            .build();
+    private final HttpClient httpClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    protected SendMessage(String botApiToken, String chatId, String message) {
+    protected SendMessage(String botApiToken, String chatId, String message, HttpClient httpClient) {
         this.message = message;
         this.chatId = chatId;
         this.url = "https://api.telegram.org/bot" + botApiToken + "/sendMessage";
+        this.httpClient = httpClient;
     }
 
     public void execute() throws IOException, InterruptedException {

@@ -9,6 +9,7 @@ import ru.ingvord.trading.repository.AlertRepository;
 import ru.ingvord.trading.repository.SecretRepository;
 import ru.ingvord.trading.service.Coingecko;
 import ru.ingvord.trading.service.TelegramBotCommandService;
+import ru.ingvord.trading.util.TracedHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.*;
@@ -49,9 +50,9 @@ public class TelegramWebhookHandler implements RequestHandler<APIGatewayV2HTTPEv
     }
 
     public TelegramWebhookHandler() throws IOException {
-        this.httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
-            .build();
+        this.httpClient = new TracedHttpClient(HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(3))
+            .build());
         
         // Support local development with environment variable
         var builder = DynamoDbClient.builder()
@@ -139,7 +140,7 @@ public class TelegramWebhookHandler implements RequestHandler<APIGatewayV2HTTPEv
         if (telegramBotToken == null || telegramBotToken.isEmpty()) {
             throw new IllegalStateException("TELEGRAM_BOT_TOKEN is required");
         }
-        new SendMessage(telegramBotToken, String.valueOf(chatId), message).execute();
+        new SendMessage(telegramBotToken, String.valueOf(chatId), message, httpClient).execute();
     }
 
     private String getHeaderCaseInsensitive(APIGatewayV2HTTPEvent input, String header) {
