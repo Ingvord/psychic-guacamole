@@ -1,4 +1,4 @@
-package ru.ingvord.trading.repository;
+package ru.ingvord.trading.model;
 
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 

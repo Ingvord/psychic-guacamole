@@ -2,10 +2,9 @@ package ru.ingvord.trading.service;
 
 import com.amazonaws.services.lambda.runtime.Context;
 import ru.ingvord.trading.repository.AlertRepository;
-import ru.ingvord.trading.repository.PriceAlert;
+import ru.ingvord.trading.model.PriceAlert;
 import ru.ingvord.trading.telegram.TelegramBotMessages;
 import ru.ingvord.trading.telegram.TelegramUpdate;
-import software.amazon.awssdk.services.dynamodb.model.*;
 
 import java.io.IOException;
 import java.math.BigDecimal;

@@ -1,10 +1,9 @@
 package ru.ingvord.trading.repository;
 
-import ru.ingvord.trading.telegram.TelegramPriceBot;
+import ru.ingvord.trading.model.PriceAlert;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.*;
 
-import java.math.BigDecimal;
 import java.util.*;
 
 public class AlertRepository {

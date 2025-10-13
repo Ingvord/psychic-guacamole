@@ -5,7 +5,7 @@ import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.ScheduledEvent;
 import com.amazonaws.services.lambda.runtime.logging.LogLevel;
 import ru.ingvord.trading.repository.AlertRepository;
-import ru.ingvord.trading.repository.PriceAlert;
+import ru.ingvord.trading.model.PriceAlert;
 import ru.ingvord.trading.repository.SecretRepository;
 import ru.ingvord.trading.service.Coingecko;
 import ru.ingvord.trading.service.PriceService;
