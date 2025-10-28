@@ -11,7 +11,8 @@ import java.util.Optional;
  */
 public class TickerMapper {
 
-    private static final Map<String, CoinInfo> TICKER_TO_COINGECKO = new HashMap<>();
+    private static final Map<String, CoinInfo> CRYPTO_TICKERS = new HashMap<>();
+    private static final Map<String, StockInfo>  STOCK_TICKERS = new HashMap<>();
 
     static {
         // Major cryptocurrencies
@@ -90,11 +91,203 @@ public class TickerMapper {
         add("RUNE", "thorchain", "THORChain");
         add("QNT", "quant-network", "Quant");
         add("FTT", "ftx-token", "FTX Token");
+
+        // === STOCKS ===
+        // Tech Giants
+        addStock("AAPL", "Apple Inc.");
+        addStock("MSFT", "Microsoft Corporation");
+        addStock("GOOGL", "Alphabet Inc. (Google)");
+        addStock("GOOG", "Alphabet Inc. Class C");
+        addStock("AMZN", "Amazon.com Inc.");
+        addStock("META", "Meta Platforms Inc. (Facebook)");
+        addStock("TSLA", "Tesla Inc.");
+        addStock("NVDA", "NVIDIA Corporation");
+        addStock("AMD", "Advanced Micro Devices");
+        addStock("INTC", "Intel Corporation");
+
+        // Finance
+        addStock("JPM", "JPMorgan Chase & Co.");
+        addStock("BAC", "Bank of America Corp.");
+        addStock("WFC", "Wells Fargo & Company");
+        addStock("GS", "Goldman Sachs Group Inc.");
+        addStock("MS", "Morgan Stanley");
+        addStock("V", "Visa Inc.");
+        addStock("MA", "Mastercard Inc.");
+        addStock("PYPL", "PayPal Holdings Inc.");
+
+        // Consumer
+        addStock("WMT", "Walmart Inc.");
+        addStock("HD", "Home Depot Inc.");
+        addStock("NKE", "Nike Inc.");
+        addStock("MCD", "McDonald's Corporation");
+        addStock("SBUX", "Starbucks Corporation");
+        addStock("DIS", "Walt Disney Company");
+        addStock("NFLX", "Netflix Inc.");
+
+        // Automotive
+        addStock("F", "Ford Motor Company");
+        addStock("GM", "General Motors Company");
+
+        // Healthcare & Pharma
+        addStock("JNJ", "Johnson & Johnson");
+        addStock("PFE", "Pfizer Inc.");
+        addStock("MRNA", "Moderna Inc.");
+        addStock("UNH", "UnitedHealth Group Inc.");
+
+        // Energy
+        addStock("XOM", "Exxon Mobil Corporation");
+        addStock("CVX", "Chevron Corporation");
+
+        // Industrial
+        addStock("BA", "Boeing Company");
+        addStock("CAT", "Caterpillar Inc.");
+
+        // Indices (for reference)
+        addStock("SPY", "SPDR S&P 500 ETF");
+        addStock("QQQ", "Invesco QQQ Trust (Nasdaq-100)");
+        addStock("DIA", "SPDR Dow Jones Industrial Average ETF");
     }
 
     private static void add(String ticker, String coingeckoId, String fullName) {
-        TICKER_TO_COINGECKO.put(ticker.toUpperCase(), new CoinInfo(ticker, coingeckoId, fullName));
+        CRYPTO_TICKERS.put(ticker.toUpperCase(), new CoinInfo(ticker, coingeckoId, fullName));
     }
+
+    private static void addStock(String ticker, String fullName) {
+        STOCK_TICKERS.put(ticker.toUpperCase(), new StockInfo(ticker, fullName));
+    }
+
+    /**
+     * Convert user input to Twelve Data format
+     *
+     * Examples:
+     * - BTC → BTC/USD
+     * - AAPL → AAPL
+     * - bitcoin → BTC/USD
+     */
+    public static String toTwelveDataSymbol(String input) {
+        String upperInput = input.toUpperCase();
+
+        // Check if it's a known crypto ticker
+        if (CRYPTO_TICKERS.containsKey(upperInput)) {
+            return upperInput + "/USD"; // Twelve Data crypto format
+        }
+
+        // Check if it's a known stock ticker
+        if (STOCK_TICKERS.containsKey(upperInput)) {
+            return upperInput; // Stocks use ticker as-is
+        }
+
+        // Check if it's a crypto name (like "bitcoin")
+        String lowerInput = input.toLowerCase();
+        Optional<CoinInfo> byCoinGeckoId = CRYPTO_TICKERS.values().stream()
+                .filter(info -> info.coinGeckoId().equals(lowerInput))
+                .findFirst();
+
+        if (byCoinGeckoId.isPresent()) {
+            return byCoinGeckoId.get().ticker() + "/USD";
+        }
+
+        // Check if it already has /USD format (already in Twelve Data format)
+        if (input.contains("/")) {
+            return input;
+        }
+
+        // Default: assume it's a stock ticker
+        return upperInput;
+    }
+
+    /**
+     * Convert Twelve Data symbol back to user-friendly format
+     *
+     * Examples:
+     * - BTC/USD → BTC
+     * - AAPL → AAPL
+     */
+    public static String fromTwelveDataSymbol(String twelveDataSymbol) {
+        // If it has /USD, it's crypto - remove the /USD part
+        if (twelveDataSymbol.endsWith("/USD")) {
+            return twelveDataSymbol.replace("/USD", "");
+        }
+
+        // Otherwise return as-is (stock ticker)
+        return twelveDataSymbol;
+    }
+
+    /**
+     * Get display information for a symbol
+     */
+    public static AssetInfo getAssetInfo(String input) {
+        String upperInput = input.toUpperCase();
+
+        // Try crypto first
+        if (CRYPTO_TICKERS.containsKey(upperInput)) {
+            CoinInfo coin = CRYPTO_TICKERS.get(upperInput);
+            return new AssetInfo(
+                    coin.ticker(),
+                    coin.fullName(),
+                    AssetType.CRYPTO,
+                    coin.fullName() + " (" + coin.ticker() + ")"
+            );
+        }
+
+        // Try stock
+        if (STOCK_TICKERS.containsKey(upperInput)) {
+            StockInfo stock = STOCK_TICKERS.get(upperInput);
+            return new AssetInfo(
+                    stock.ticker(),
+                    stock.fullName(),
+                    AssetType.STOCK,
+                    stock.fullName() + " (" + stock.ticker() + ")"
+            );
+        }
+
+        // Check crypto by name
+        String lowerInput = input.toLowerCase();
+        Optional<CoinInfo> byCoinGeckoId = CRYPTO_TICKERS.values().stream()
+                .filter(info -> info.coinGeckoId().equals(lowerInput))
+                .findFirst();
+
+        if (byCoinGeckoId.isPresent()) {
+            CoinInfo coin = byCoinGeckoId.get();
+            return new AssetInfo(
+                    coin.ticker(),
+                    coin.fullName(),
+                    AssetType.CRYPTO,
+                    coin.fullName() + " (" + coin.ticker() + ")"
+            );
+        }
+
+        // Unknown - default to stock
+        return new AssetInfo(
+                upperInput,
+                capitalize(input),
+                AssetType.STOCK,
+                capitalize(input) + " (" + upperInput + ")"
+        );
+    }
+
+    /**
+     * Detect asset type
+     */
+    public static AssetType detectAssetType(String input) {
+        String upperInput = input.toUpperCase();
+
+        if (CRYPTO_TICKERS.containsKey(upperInput)) {
+            return AssetType.CRYPTO;
+        }
+
+        if (STOCK_TICKERS.containsKey(upperInput)) {
+            return AssetType.STOCK;
+        }
+
+        // Check by crypto name
+        String lowerInput = input.toLowerCase();
+        boolean isCrypto = CRYPTO_TICKERS.values().stream()
+                .anyMatch(info -> info.coinGeckoId().equals(lowerInput));
+
+        return isCrypto ? AssetType.CRYPTO : AssetType.STOCK;
+    }
+
 
     /**
      * Convert user input to CoinGecko ID
@@ -104,14 +297,14 @@ public class TickerMapper {
         String upperInput = input.toUpperCase();
 
         // Check if it's a known ticker
-        if (TICKER_TO_COINGECKO.containsKey(upperInput)) {
-            return TICKER_TO_COINGECKO.get(upperInput).coingeckoId();
+        if (CRYPTO_TICKERS.containsKey(upperInput)) {
+            return CRYPTO_TICKERS.get(upperInput).coinGeckoId();
         }
 
         // Check if it's already a CoinGecko ID
         String lowerInput = input.toLowerCase();
-        Optional<CoinInfo> byId = TICKER_TO_COINGECKO.values().stream()
-                .filter(info -> info.coingeckoId().equals(lowerInput))
+        Optional<CoinInfo> byId = CRYPTO_TICKERS.values().stream()
+                .filter(info -> info.coinGeckoId().equals(lowerInput))
                 .findFirst();
 
         if (byId.isPresent()) {
@@ -129,14 +322,14 @@ public class TickerMapper {
         String upperInput = input.toUpperCase();
 
         // Try ticker first
-        if (TICKER_TO_COINGECKO.containsKey(upperInput)) {
-            return TICKER_TO_COINGECKO.get(upperInput);
+        if (CRYPTO_TICKERS.containsKey(upperInput)) {
+            return CRYPTO_TICKERS.get(upperInput);
         }
 
         // Try CoinGecko ID
         String lowerInput = input.toLowerCase();
-        Optional<CoinInfo> byId = TICKER_TO_COINGECKO.values().stream()
-                .filter(info -> info.coingeckoId().equals(lowerInput))
+        Optional<CoinInfo> byId = CRYPTO_TICKERS.values().stream()
+                .filter(info -> info.coinGeckoId().equals(lowerInput))
                 .findFirst();
 
         return byId.orElse(new CoinInfo(
@@ -151,77 +344,34 @@ public class TickerMapper {
      */
     public static boolean isSupported(String input) {
         String upperInput = input.toUpperCase();
-        if (TICKER_TO_COINGECKO.containsKey(upperInput)) {
+        if (CRYPTO_TICKERS.containsKey(upperInput)) {
             return true;
         }
 
         String lowerInput = input.toLowerCase();
-        return TICKER_TO_COINGECKO.values().stream()
-                .anyMatch(info -> info.coingeckoId().equals(lowerInput));
+        return CRYPTO_TICKERS.values().stream()
+                .anyMatch(info -> info.coinGeckoId().equals(lowerInput));
     }
 
     /**
      * Get all supported tickers for help message
      */
-    public static String getSupportedTickersMessage() {
+    public static String getSupportedCryptoMessage() {
         StringBuilder sb = new StringBuilder("**Popular Tickers:**\n\n");
 
         String[] featured = {"BTC", "ETH", "SOL", "ADA", "DOGE", "XRP",
                 "MATIC", "AVAX", "DOT", "LINK", "UNI", "ATOM"};
 
         for (String ticker : featured) {
-            CoinInfo info = TICKER_TO_COINGECKO.get(ticker);
+            CoinInfo info = CRYPTO_TICKERS.get(ticker);
             if (info != null) {
                 sb.append(String.format("• **%s** - %s\n", ticker, info.fullName()));
             }
         }
 
-        sb.append("\n_...and ").append(TICKER_TO_COINGECKO.size() - featured.length)
+        sb.append("\n_...and ").append(CRYPTO_TICKERS.size() - featured.length)
                 .append(" more!_\n\n");
         sb.append("💡 Use `/tickers` to see the full list");
-
-        return sb.toString();
-    }
-
-    /**
-     * Get all tickers in categories
-     */
-    public static String getAllTickersMessage() {
-        StringBuilder sb = new StringBuilder();
-
-        sb.append("💎 **All Supported Cryptocurrencies**\n\n");
-
-        // Top 10
-        sb.append("**🏆 Top Cryptocurrencies:**\n");
-        String[] top = {"BTC", "ETH", "USDT", "BNB", "SOL", "XRP", "USDC", "ADA", "DOGE", "TRX"};
-        for (String ticker : top) {
-            CoinInfo info = TICKER_TO_COINGECKO.get(ticker);
-            if (info != null) {
-                sb.append(String.format("• %s - %s\n", ticker, info.fullName()));
-            }
-        }
-
-        // DeFi
-        sb.append("\n**🔄 DeFi Tokens:**\n");
-        String[] defi = {"UNI", "AAVE", "MKR", "SNX", "COMP", "CRV", "CAKE", "SUSHI"};
-        for (String ticker : defi) {
-            CoinInfo info = TICKER_TO_COINGECKO.get(ticker);
-            if (info != null) {
-                sb.append(String.format("• %s - %s\n", ticker, info.fullName()));
-            }
-        }
-
-        // Layer 2
-        sb.append("\n**⚡ Layer 2 & Scaling:**\n");
-        String[] l2 = {"MATIC", "ARB", "OP", "IMX", "LRC"};
-        for (String ticker : l2) {
-            CoinInfo info = TICKER_TO_COINGECKO.get(ticker);
-            if (info != null) {
-                sb.append(String.format("• %s - %s\n", ticker, info.fullName()));
-            }
-        }
-
-        sb.append(String.format("\n**Total:** %d cryptocurrencies supported", TICKER_TO_COINGECKO.size()));
 
         return sb.toString();
     }
@@ -232,11 +382,73 @@ public class TickerMapper {
     }
 
     /**
-     * Coin information record
+     * Get supported stock tickers message
      */
-    public record CoinInfo(String ticker, String coingeckoId, String fullName) {
+    public static String getSupportedStocksMessage() {
+        StringBuilder sb = new StringBuilder("**📈 Popular Stocks:**\n\n");
+
+        String[] featured = {"AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA",
+                "META", "JPM", "V", "WMT", "NFLX", "DIS"};
+
+        for (String ticker : featured) {
+            StockInfo info = STOCK_TICKERS.get(ticker);
+            if (info != null) {
+                sb.append(String.format("• **%s** - %s\n", ticker, info.fullName()));
+            }
+        }
+
+        sb.append("\n_Plus thousands more US & international stocks!_");
+
+        return sb.toString();
+    }
+
+    /**
+     * Get all tickers organized by category
+     */
+    public static String getAllTickersMessage() {
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("💼 **All Supported Assets**\n\n");
+
+        // Crypto section
+        sb.append(getSupportedCryptoMessage());
+        sb.append("\n\n");
+
+        // Stock section
+        sb.append(getSupportedStocksMessage());
+
+        sb.append("\n\n");
+        sb.append(String.format("**Total:** %d cryptocurrencies + %d stocks",
+                CRYPTO_TICKERS.size(), STOCK_TICKERS.size()));
+
+        return sb.toString();
+    }
+
+    // ===== Record Classes =====
+    public record CoinInfo(String ticker, String coinGeckoId, String fullName) {
         public String displayName() {
             return fullName + " (" + ticker + ")";
         }
+    }
+
+    public record StockInfo(String ticker, String fullName) {
+        public String displayName() {
+            return fullName + " (" + ticker + ")";
+        }
+    }
+
+    public record AssetInfo(
+            String ticker,
+            String fullName,
+            AssetType type,
+            String displayName
+    ) {}
+
+    public enum AssetType {
+        CRYPTO,
+        STOCK,
+        FOREX,
+        ETF,
+        INDEX
     }
 }

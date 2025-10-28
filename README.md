@@ -19,5 +19,5 @@ sam local start-api \
   --env-vars env.json \
   --docker-network dynamodb_net \
   --debug-port 5858 \
-  --debug-args "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5858"
+  --debug-args "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5858"
 ```

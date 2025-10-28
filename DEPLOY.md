@@ -23,6 +23,14 @@ aws ssm put-parameter \
     --description "Telegram bot webhook secret for price alerts"
 ```
 
+```bash
+aws ssm put-parameter \
+    --name "/telegram-bot/twelvedata-apikey" \
+    --value "YOUR_TWELVEDATA_APIKEY" \
+    --type SecureString \
+    --overwrite \
+    --description "Api key for market data via 12data"
+```
 
 ## Create DynamoDB table
 
@@ -129,21 +137,27 @@ aws lambda create-function \
 
 ```bash
 aws lambda create-function \
-    --function-name telegram-price-bot \
-    --runtime java21 \
+    --function-name telegram-price-bot-native \
+    --runtime provided.al2023 \
     --role $ROLE_ARN \
     --handler ru.ingvord.trading.telegram.TelegramPriceBot::handleRequest \
-    --zip-file fileb://$JAR_FILE \
-    --timeout 30 \
-    --memory-size 512 \
-    --environment Variables="{ALERTS_TABLE=PriceAlerts,TELEGRAM_BOT_TOKEN_PARAM=/telegram-bot/token}" \
-    --description "Telegram bot frontend for price alerts"
+    --zip-file fileb://target/function.zip \
+    --timeout 10 \
+    --memory-size 256 \
+    --environment Variables="{ALERTS_TABLE=PriceAlerts,TELEGRAM_BOT_TOKEN=ssm:/telegram-bot/token}" \
+    --description "Telegram bot for price alerts"
 ```
 
 ```bash
 aws lambda update-function-code \
 --function-name telegram-price-bot-frontend \
 --zip-file fileb://$JAR_FILE
+```
+
+```bash
+aws lambda update-function-code \
+--function-name telegram-price-bot-native \
+--zip-file fileb://target/function.zip
 ```
 
 Suspend existing lambda:
@@ -233,4 +247,20 @@ echo "Setting webhook to: $API_ENDPOINT"
 curl -X POST "https://api.telegram.org/bot$BOT_TOKEN/setWebhook?secret_token=$WEBHOOK_TOKEN" \
     -H "Content-Type: application/json" \
     -d "{\"url\":\"$API_ENDPOINT\"}"
+```
+
+9. Set CloudWatch log retention
+
+```bash
+aws logs put-retention-policy \
+--log-group-name /aws/lambda/telegram-price-bot-frontend-native \
+--retention-in-days 7 \
+--region eu-central-1
+```
+
+```bash
+aws logs put-retention-policy \
+--log-group-name /aws/lambda/telegram-price-bot \
+--retention-in-days 7 \
+--region eu-central-1
 ```
