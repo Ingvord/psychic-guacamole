@@ -71,7 +71,7 @@ public class TelegramWebhookHandler implements RequestHandler<APIGatewayV2HTTPEv
         this.dynamoDb = builder.build();
         this.telegramCommandService = new TelegramBotCommandService(
                 new PriceServiceWithCache(
-                        new TwelveData(httpClient, TWELVEDATA_APIKEY)),
+                        new TwelveData(httpClient, new SecretRepository().getParameter(TWELVEDATA_APIKEY))),
                 new AlertRepository(alertsTable, dynamoDb));
 
         this.telegramBotToken = new SecretRepository().getParameter(TELEGRAM_BOT_TOKEN);

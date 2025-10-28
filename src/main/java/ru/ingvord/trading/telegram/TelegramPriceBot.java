@@ -60,7 +60,7 @@ public class TelegramPriceBot implements RequestHandler<ScheduledEvent, String>,
         }
 
         this.dynamoDb = builder.build();
-        this.priceService = new TwelveData(httpClient, TWELVEDATA_APIKEY);
+        this.priceService = new TwelveData(httpClient, new SecretRepository().getParameter(TWELVEDATA_APIKEY));
         this.alertRepository = new AlertRepository(ALERTS_TABLE, dynamoDb);
     }
     
