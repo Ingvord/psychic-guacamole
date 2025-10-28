@@ -7,10 +7,7 @@ import com.amazonaws.services.lambda.runtime.logging.LogLevel;
 import ru.ingvord.trading.repository.AlertRepository;
 import ru.ingvord.trading.model.PriceAlert;
 import ru.ingvord.trading.repository.SecretRepository;
-import ru.ingvord.trading.service.Coingecko;
-import ru.ingvord.trading.service.PriceService;
-import ru.ingvord.trading.service.PriceServiceWithCache;
-import ru.ingvord.trading.service.TickerMapper;
+import ru.ingvord.trading.service.*;
 import ru.ingvord.trading.util.TracedHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
@@ -63,7 +60,7 @@ public class TelegramPriceBot implements RequestHandler<ScheduledEvent, String>,
         }
 
         this.dynamoDb = builder.build();
-        this.priceService = new PriceServiceWithCache(new Coingecko(httpClient));
+        this.priceService = new TwelveData(httpClient, TWELVEDATA_APIKEY);
         this.alertRepository = new AlertRepository(ALERTS_TABLE, dynamoDb);
     }
     
