@@ -146,7 +146,7 @@ public class TwelveData implements PriceService {
                     response.statusCode());
         }
 
-        return parseBatchResponse(response.body());
+        return parseBatchResponse(response.body(), twelveDataSymbols);
     }
 
     /**
@@ -178,15 +178,23 @@ public class TwelveData implements PriceService {
      * 1. Object with symbol keys (multiple symbols)
      * 2. Single object with price field (one symbol)
      */
-    private Map<String, BigDecimal> parseBatchResponse(String responseBody)
+    private Map<String, BigDecimal> parseBatchResponse(String responseBody, Set<String> requestedTwelveDataSymbols)
             throws IOException {
         JsonNode jsonNode = objectMapper.readTree(responseBody);
         Map<String, BigDecimal> prices = new HashMap<>();
 
-        // Check if response is an array or object
+        if (jsonNode.isObject() && jsonNode.has("price")) {
+            // Single-symbol response: {"price": "74297.16"}
+            // Twelve Data omits the symbol wrapper when only one symbol was requested
+            String priceStr = jsonNode.get("price").asText();
+            BigDecimal price = new BigDecimal(priceStr).setScale(PRICE_SCALE, RoundingMode.HALF_UP);
+            String onlySymbol = requestedTwelveDataSymbols.iterator().next();
+            prices.put(TickerMapper.fromTwelveDataSymbol(onlySymbol), price);
+            return prices;
+        }
+
         if (jsonNode.isObject()) {
-            // Could be single symbol response or batch response
-            // Batch response - iterate over each symbol
+            // Multi-symbol response: {"BTC/USD": {"price": "..."}, ...}
             jsonNode.fields().forEachRemaining(entry -> {
                 String twelveDataSymbol = entry.getKey();
                 JsonNode data = entry.getValue();
@@ -197,12 +205,10 @@ public class TwelveData implements PriceService {
                         BigDecimal price = new BigDecimal(priceStr)
                                 .setScale(PRICE_SCALE, RoundingMode.HALF_UP);
 
-                        // Map back to original symbol format
                         String originalSymbol = TickerMapper.fromTwelveDataSymbol(twelveDataSymbol);
                         prices.put(originalSymbol, price);
                     }
                 } catch (Exception e) {
-                    // Skip symbols with errors, log them
                     System.err.println("Error parsing price for " + twelveDataSymbol + ": " + e.getMessage());
                 }
             });

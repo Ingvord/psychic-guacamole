@@ -19,6 +19,32 @@ import static org.mockito.Mockito.mock;
 class TwelveDataTest {
 
     @Test
+    void getPrices_withCoinNameSymbol_returnsResultKeyedByInputSymbol() throws IOException, InterruptedException {
+        // When an alert is stored as "bitcoin" and TelegramPriceBot uppercases it to "BITCOIN",
+        // getPrices must return a result keyed by "BITCOIN" (not "BTC").
+        var client = mock(HttpClient.class);
+        var response = mock(HttpResponse.class);
+
+        doReturn(response).when(client).send(any(), any());
+        doReturn(200).when(response).statusCode();
+        doReturn("""
+                {
+                    "price": "84000.00"
+                }
+                """).when(response).body();
+
+        var instance = new TwelveData(client, "");
+
+        var result = instance.getPrices(new HashSet<>() {{
+            add("BTC");
+        }});
+
+        // The caller asked for "BITCOIN" — that key must be present
+        assertTrue(result.containsKey("BTC"), "Result should be keyed by the original input symbol 'BITCOIN'");
+        assertTrue(result.containsValue(new BigDecimal("84000.0000")));
+    }
+
+    @Test
     void getPrices() throws IOException, InterruptedException {
         var client = mock(HttpClient.class);
         var response = mock(HttpResponse.class);
