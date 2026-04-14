@@ -29,6 +29,9 @@
         <!-- Native Image Configuration -->
         <native.maven.plugin.version>0.10.2</native.maven.plugin.version>
         <imageName>telegram-bot</imageName>
+
+        <!-- Lambda deploy configuration -->
+        <lambda.function.name>telegram-price-bot-native</lambda.function.name>
     </properties>
 
     <dependencyManagement>
@@ -215,11 +218,24 @@
                 </configuration>
             </plugin>
 
+            <!-- Skip default Maven deploy (no artifact repository configured) -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <version>3.1.2</version>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+
             <!-- Maven Surefire Plugin for Tests -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.3</version>
+                <configuration>
+                    <argLine>-Dnet.bytebuddy.experimental=true</argLine>
+                </configuration>
             </plugin>
 
             <!-- Maven Shade Plugin - Creates fat JAR with both handlers -->
@@ -300,6 +316,31 @@
                                     </descriptors>
                                     <attach>false</attach>
                                     <appendAssemblyId>false</appendAssemblyId>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.3.0</version>
+                        <executions>
+                            <execution>
+                                <id>lambda-deploy</id>
+                                <phase>deploy</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <executable>aws</executable>
+                                    <arguments>
+                                        <argument>lambda</argument>
+                                        <argument>update-function-code</argument>
+                                        <argument>--function-name</argument>
+                                        <argument>${lambda.function.name}</argument>
+                                        <argument>--zip-file</argument>
+                                        <argument>fileb://${project.build.directory}/function.zip</argument>
+                                    </arguments>
                                 </configuration>
                             </execution>
                         </executions>
