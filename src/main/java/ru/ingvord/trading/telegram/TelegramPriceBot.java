@@ -6,6 +6,7 @@ import com.amazonaws.services.lambda.runtime.events.ScheduledEvent;
 import com.amazonaws.services.lambda.runtime.logging.LogLevel;
 import ru.ingvord.trading.repository.AlertRepository;
 import ru.ingvord.trading.model.PriceAlert;
+import ru.ingvord.trading.model.RsiAlert;
 import ru.ingvord.trading.repository.SecretRepository;
 import ru.ingvord.trading.service.*;
 import ru.ingvord.trading.util.TracedHttpClient;
@@ -36,11 +37,23 @@ public class TelegramPriceBot implements RequestHandler<ScheduledEvent, String>,
     public static final String BOT_NAME = "AdeptConstructionTechnicianBot";
 
     private final PriceService priceService;
+    private final IndicatorService indicatorService;
     private final AlertRepository alertRepository;
 
     private final String botApiToken;
     private final HttpClient httpClient;
-    private final DynamoDbClient dynamoDb;
+    private final DynamoDbClient dynamoDb; // null when constructed with injected collaborators
+
+    /** Seam for tests: inject everything instead of building AWS/HTTP clients. */
+    TelegramPriceBot(PriceService priceService, IndicatorService indicatorService,
+                     AlertRepository alertRepository, String botApiToken, HttpClient httpClient) {
+        this.priceService = priceService;
+        this.indicatorService = indicatorService;
+        this.alertRepository = alertRepository;
+        this.botApiToken = botApiToken;
+        this.httpClient = httpClient;
+        this.dynamoDb = null;
+    }
 
     public TelegramPriceBot() throws IOException {
         this.botApiToken = new SecretRepository().getParameter(TELEGRAM_BOT_TOKEN);
@@ -60,7 +73,9 @@ public class TelegramPriceBot implements RequestHandler<ScheduledEvent, String>,
         }
 
         this.dynamoDb = builder.build();
-        this.priceService = new TwelveData(httpClient, new SecretRepository().getParameter(TWELVEDATA_APIKEY));
+        var twelveData = new TwelveData(httpClient, new SecretRepository().getParameter(TWELVEDATA_APIKEY));
+        this.priceService = twelveData;
+        this.indicatorService = new Bybit(httpClient);
         this.alertRepository = new AlertRepository(ALERTS_TABLE, dynamoDb);
     }
     
@@ -121,6 +136,8 @@ public class TelegramPriceBot implements RequestHandler<ScheduledEvent, String>,
                 }
             }
 
+            checkRsiAlerts(context);
+
             String summary = String.format(
                     "Price check completed: %d alerts checked, %d symbols fetched, %d users notified",
                     activeAlerts.size(), uniqueSymbols.size(), notificationsSent
@@ -133,6 +150,62 @@ public class TelegramPriceBot implements RequestHandler<ScheduledEvent, String>,
         } catch (Exception e) {
             context.getLogger().log("Error in price check: " + e.getMessage());
             return "Price check failed: " + e.getMessage();
+        }
+    }
+
+    /**
+     * Notify users when RSI enters the overbought/oversold zone.
+     * Fires on zone change only; wrapped in its own try/catch so it never breaks price alerts.
+     */
+    private void checkRsiAlerts(Context context) {
+        try {
+            record RsiKey(String symbol, String interval, int period, String seriesType) {}
+
+            Map<RsiKey, List<RsiAlert>> groups = alertRepository.findRsiByStatus().stream()
+                    .collect(Collectors.groupingBy(a ->
+                            new RsiKey(a.symbol(), a.interval(), a.period(), a.seriesType())));
+
+            Map<Long, StringBuilder> messages = new HashMap<>();
+
+            // One API call per distinct (symbol, interval, period, series) combination
+            for (var group : groups.entrySet()) {
+                RsiKey key = group.getKey();
+                BigDecimal rsi;
+                try {
+                    rsi = indicatorService.getRsi(key.symbol(), key.interval(), key.period(), key.seriesType());
+                } catch (IOException | InterruptedException e) {
+                    context.getLogger().log("RSI fetch failed for " + key + ": " + e.getMessage(), LogLevel.WARN);
+                    continue;
+                }
+
+                String zone = RsiAlert.zoneOf(rsi);
+                for (RsiAlert alert : group.getValue()) {
+                    if (zone.equals(alert.lastZone())) {
+                        continue;
+                    }
+                    alertRepository.updateRsiZone(alert.alertId(), zone);
+
+                    if (!RsiAlert.ZONE_NORMAL.equals(zone)) {
+                        boolean overbought = RsiAlert.ZONE_OVERBOUGHT.equals(zone);
+                        messages.computeIfAbsent(alert.chatId(), k -> new StringBuilder("📈 RSI Alert!\n\n"))
+                                .append(String.format("%s %s RSI(%d) is %.2f — %s\n\n",
+                                        overbought ? "🔥" : "🧊",
+                                        alert.symbol().toUpperCase() + " " + alert.interval(),
+                                        alert.period(), rsi,
+                                        overbought ? "overbought" : "oversold"));
+                    }
+                }
+            }
+
+            for (var entry : messages.entrySet()) {
+                try {
+                    sendTelegramMessage(entry.getKey(), entry.getValue().toString());
+                } catch (IOException | InterruptedException e) {
+                    context.getLogger().log("Failed to send RSI notification to " + entry.getKey() + ": " + e.getMessage(), LogLevel.ERROR);
+                }
+            }
+        } catch (Exception e) {
+            context.getLogger().log("Error in RSI check: " + e.getMessage(), LogLevel.ERROR);
         }
     }
 
@@ -201,7 +274,7 @@ public class TelegramPriceBot implements RequestHandler<ScheduledEvent, String>,
 
     @Override
     public void close() {
-        dynamoDb.close();
+        if (dynamoDb != null) dynamoDb.close();
         httpClient.close();
     }
 

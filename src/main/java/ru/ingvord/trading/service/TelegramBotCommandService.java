@@ -3,6 +3,7 @@ package ru.ingvord.trading.service;
 import com.amazonaws.services.lambda.runtime.Context;
 import ru.ingvord.trading.repository.AlertRepository;
 import ru.ingvord.trading.model.PriceAlert;
+import ru.ingvord.trading.model.RsiAlert;
 import ru.ingvord.trading.telegram.TelegramBotMessages;
 import ru.ingvord.trading.telegram.TelegramUpdate;
 
@@ -13,6 +14,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static ru.ingvord.trading.repository.AlertRepository.ALERT_STATUS_ACTIVE;
+import static ru.ingvord.trading.repository.AlertRepository.ALERT_STATUS_RSI_ACTIVE;
 import static ru.ingvord.trading.telegram.TelegramBotMessages.*;
 import static ru.ingvord.trading.telegram.TelegramBotMessages.INVALID_PRICE;
 
@@ -21,13 +23,21 @@ public class TelegramBotCommandService {
     private static final Pattern ALERT_PATTERN = Pattern.compile("/alert\\s+(\\w+)\\s+([\\d.]+)\\s+([\\d.]+)");
     private static final Pattern PRICE_PATTERN = Pattern.compile("/price\\s+(\\w+)");
     private static final Pattern REMOVE_PATTERN = Pattern.compile("/remove\\s+(\\w+)");
+    private static final Pattern RSI_PATTERN = Pattern.compile(
+            "/rsi\\s+(\\w+)\\s+(15m|30m|1h|2h|4h|1d|1w)(?:\\s+(\\d+))?(?:\\s+(close|open|high|low))?",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern RSI_REMOVE_PATTERN = Pattern.compile("/rsi\\s+rm\\s+(\\w+)", Pattern.CASE_INSENSITIVE);
     public static final int MAX_ALERTS_PER_USER = 20;
+    public static final int MAX_RSI_ALERTS_PER_USER = 5;
+    public static final int DEFAULT_RSI_PERIOD = 14;
 
     private final PriceService priceService;
+    private final IndicatorService indicatorService;
     private final AlertRepository alertRepository;
 
-    public TelegramBotCommandService(PriceService priceService, AlertRepository alertRepository) {
+    public TelegramBotCommandService(PriceService priceService, IndicatorService indicatorService, AlertRepository alertRepository) {
         this.priceService = priceService;
+        this.indicatorService = indicatorService;
         this.alertRepository = alertRepository;
     }
 
@@ -54,6 +64,8 @@ public class TelegramBotCommandService {
             return handleClearCommand(chatId, context);
         } else if (text.startsWith("/price")) {
             return handlePriceCommand(text, context);
+        } else if (text.startsWith("/rsi")) {
+            return handleRsiCommand(chatId, text.trim(), context);
         } else if (text.startsWith("/")) {
             return "Unknown command. Type /help to see available commands.";
         }
@@ -268,6 +280,87 @@ public class TelegramBotCommandService {
             context.getLogger().log("Error getting price: " + e.getMessage());
             return "❌ Failed to get price. Please check the symbol name and try again.\n\n" +
                     "Popular symbols: bitcoin, ethereum, cardano, solana, dogecoin";
+        }
+    }
+
+    private String handleRsiCommand(long chatId, String text, Context context) {
+        if (text.equalsIgnoreCase("/rsi")) {
+            return listRsiAlerts(chatId, context);
+        }
+
+        Matcher removeMatcher = RSI_REMOVE_PATTERN.matcher(text);
+        if (removeMatcher.matches()) {
+            return removeRsiAlert(chatId, removeMatcher.group(1), context);
+        }
+
+        Matcher matcher = RSI_PATTERN.matcher(text);
+        if (!matcher.matches()) {
+            return INVALID_RSI;
+        }
+
+        String symbol = matcher.group(1).toLowerCase();
+        String interval = matcher.group(2).toLowerCase();
+        int period = matcher.group(3) != null ? Integer.parseInt(matcher.group(3)) : DEFAULT_RSI_PERIOD;
+        String seriesType = matcher.group(4) != null ? matcher.group(4).toLowerCase() : "close";
+
+        if (period < 2 || period > 100) {
+            return "❌ RSI period must be between 2 and 100.";
+        }
+
+        try {
+            if (alertRepository.findRsiByChatId(chatId).size() >= MAX_RSI_ALERTS_PER_USER) {
+                return String.format("❌ RSI alert limit reached (%d). Use `/rsi` to list and `/rsi rm <id>` to remove.",
+                        MAX_RSI_ALERTS_PER_USER);
+            }
+
+            // Also verifies the symbol and gives the starting zone, so creating inside a zone doesn't fire at once
+            BigDecimal rsi = indicatorService.getRsi(symbol, interval, period, seriesType);
+
+            String alertId = UUID.randomUUID().toString();
+            alertRepository.saveRsi(new RsiAlert(alertId, chatId, symbol, interval, period, seriesType,
+                    RsiAlert.zoneOf(rsi), System.currentTimeMillis(), ALERT_STATUS_RSI_ACTIVE));
+
+            return String.format(RSI_ALERT_CREATED,
+                    symbol.toUpperCase(), interval, period, seriesType, rsi, alertId.substring(0, 8));
+        } catch (Exception e) {
+            context.getLogger().log("Error creating RSI alert: " + e.getMessage());
+            return "❌ Failed to create RSI alert. RSI supports crypto pairs listed on Bybit spot (e.g. BTC, ETH, SOL) — please check the symbol and try again.";
+        }
+    }
+
+    private String listRsiAlerts(long chatId, Context context) {
+        try {
+            List<RsiAlert> alerts = alertRepository.findRsiByChatId(chatId);
+            if (alerts.isEmpty()) {
+                return "📭 You have no RSI alerts.\n\nCreate one: `/rsi BTC 4h`";
+            }
+
+            StringBuilder response = new StringBuilder("📈 **Your RSI Alerts:**\n\n");
+            for (RsiAlert alert : alerts) {
+                response.append(String.format("• **%s** %s (period %d, %s) — ID: `%s`\n",
+                        alert.symbol().toUpperCase(), alert.interval(), alert.period(),
+                        alert.seriesType(), alert.alertId().substring(0, 8)));
+            }
+            response.append("\nUse `/rsi rm <id>` to remove an alert");
+            return response.toString();
+        } catch (Exception e) {
+            context.getLogger().log("Error listing RSI alerts: " + e.getMessage());
+            return "❌ Failed to retrieve your RSI alerts. Please try again later.";
+        }
+    }
+
+    private String removeRsiAlert(long chatId, String idPrefix, Context context) {
+        try {
+            for (RsiAlert alert : alertRepository.findRsiByChatId(chatId)) {
+                if (alert.alertId().startsWith(idPrefix)) {
+                    removeAlert(alert.alertId());
+                    return "✅ RSI alert removed successfully!";
+                }
+            }
+            return "❌ RSI alert not found. Use `/rsi` to see your RSI alerts.";
+        } catch (Exception e) {
+            context.getLogger().log("Error removing RSI alert: " + e.getMessage());
+            return "❌ Failed to remove RSI alert. Please try again later.";
         }
     }
 

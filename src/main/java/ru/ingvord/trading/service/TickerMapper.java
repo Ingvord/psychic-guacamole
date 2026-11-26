@@ -197,6 +197,35 @@ public class TickerMapper {
     }
 
     /**
+     * Convert user input to a Bybit spot symbol
+     *
+     * Examples:
+     * - BTC → BTCUSDT
+     * - bitcoin → BTCUSDT
+     * - BTC/USD → BTCUSDT
+     * - ETHUSDC → ETHUSDC
+     */
+    public static String toBybitSymbol(String input) {
+        String upperInput = input.toUpperCase();
+
+        if (upperInput.endsWith("USDT") || upperInput.endsWith("USDC")) {
+            return upperInput.replace("/", "");
+        }
+
+        // Known crypto name (like "bitcoin") → ticker
+        String lowerInput = input.toLowerCase();
+        Optional<CoinInfo> byCoinGeckoId = CRYPTO_TICKERS.values().stream()
+                .filter(info -> info.coinGeckoId().equals(lowerInput))
+                .findFirst();
+        if (byCoinGeckoId.isPresent()) {
+            return byCoinGeckoId.get().ticker().toUpperCase() + "USDT";
+        }
+
+        // BTC/USD → BTC; anything else is assumed to be a base ticker (non-crypto fails at Bybit)
+        return fromTwelveDataSymbol(upperInput).replace("/", "") + "USDT";
+    }
+
+    /**
      * Convert Twelve Data symbol back to user-friendly format
      *
      * Examples:

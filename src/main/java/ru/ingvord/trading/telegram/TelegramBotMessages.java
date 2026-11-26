@@ -28,6 +28,14 @@ public class TelegramBotMessages {
               Example: `/price BTC`
               Example: `/price ethereum`
             
+            **📈 RSI Alerts:**
+            • `/rsi <ticker> <tf> [period] [close|open|high|low]` - Notify when RSI enters overbought (70+) / oversold (30-)
+              Timeframes: 15m 30m 1h 2h 4h 1d 1w. Default period 14, default source close
+              Crypto only (Bybit spot data)
+              Example: `/rsi BTC 4h`
+            • `/rsi` - List your RSI alerts
+            • `/rsi rm <id>` - Remove an RSI alert
+
             **📊 Alert Management:**
             • `/list` - Show all your active alerts
             • `/remove <alert_id>` - Remove specific alert
@@ -98,6 +106,32 @@ public class TelegramBotMessages {
             `/remove a1b2c3d4`
             
             💡 Use `/list` to see your alert IDs
+            """;
+
+    public static final String INVALID_RSI = """
+            ❌ **Invalid RSI command!**
+
+            **Usage:**
+            • `/rsi <ticker> <tf> [period] [close|open|high|low]`
+            • `/rsi` - list your RSI alerts
+            • `/rsi rm <id>` - remove an RSI alert
+
+            **Timeframes:** 15m, 30m, 1h, 2h, 4h, 1d, 1w
+
+            **Examples:**
+            • `/rsi BTC 4h`
+            • `/rsi ETH 1h 21 high`
+            """;
+
+    public static final String RSI_ALERT_CREATED = """
+            ✅ **RSI Alert Created!**
+
+            **Symbol:** %s
+            **Timeframe:** %s (period %d, %s)
+            **Current RSI:** %.2f
+            **Alert ID:** `%s`
+
+            You'll be notified when RSI enters overbought (70+) or oversold (30-).
             """;
 
     public static final String INVALID_PRICE = """

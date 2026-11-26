@@ -7,6 +7,7 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import ru.ingvord.trading.repository.AlertRepository;
 import ru.ingvord.trading.repository.SecretRepository;
+import ru.ingvord.trading.service.Bybit;
 import ru.ingvord.trading.service.Coingecko;
 import ru.ingvord.trading.service.PriceServiceWithCache;
 import ru.ingvord.trading.service.TelegramBotCommandService;
@@ -51,6 +52,16 @@ public class TelegramWebhookHandler implements RequestHandler<APIGatewayV2HTTPEv
         Runtime.getRuntime().addShutdownHook(new Thread(this::close));
     }
 
+    /** Seam for tests: inject the command service and Telegram settings instead of building AWS clients. */
+    TelegramWebhookHandler(HttpClient httpClient, TelegramBotCommandService commandService,
+                           String telegramBotToken, String expectedToken) {
+        this.httpClient = httpClient;
+        this.dynamoDb = null;
+        this.telegramCommandService = commandService;
+        this.telegramBotToken = telegramBotToken;
+        this.expectedToken = expectedToken;
+    }
+
     public TelegramWebhookHandler() throws IOException {
         this.httpClient = new TracedHttpClient(HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(3))
@@ -69,9 +80,10 @@ public class TelegramWebhookHandler implements RequestHandler<APIGatewayV2HTTPEv
         String alertsTable = Optional.ofNullable(ALERTS_TABLE).orElse("price-alerts-local");
 
         this.dynamoDb = builder.build();
+        var twelveData = new TwelveData(httpClient, new SecretRepository().getParameter(TWELVEDATA_APIKEY));
         this.telegramCommandService = new TelegramBotCommandService(
-                new PriceServiceWithCache(
-                        new TwelveData(httpClient, new SecretRepository().getParameter(TWELVEDATA_APIKEY))),
+                new PriceServiceWithCache(twelveData),
+                new Bybit(httpClient),
                 new AlertRepository(alertsTable, dynamoDb));
 
         this.telegramBotToken = new SecretRepository().getParameter(TELEGRAM_BOT_TOKEN);
@@ -121,7 +133,7 @@ public class TelegramWebhookHandler implements RequestHandler<APIGatewayV2HTTPEv
 
     @Override
     public void close() {
-        dynamoDb.close();
+        if (dynamoDb != null) dynamoDb.close();
         httpClient.close();
     }
 

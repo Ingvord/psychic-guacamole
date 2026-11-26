@@ -32,6 +32,11 @@
 
         <!-- Lambda deploy configuration -->
         <lambda.function.name>telegram-price-bot-native</lambda.function.name>
+
+        <!-- Test selection: default = offline tests only; see profiles telegram / e2e -->
+        <test.groups></test.groups>
+        <test.excluded.groups>e2e</test.excluded.groups>
+        <telegram.live>false</telegram.live>
     </properties>
 
     <dependencyManagement>
@@ -235,6 +240,11 @@
                 <version>3.2.3</version>
                 <configuration>
                     <argLine>-Dnet.bytebuddy.experimental=true</argLine>
+                    <groups>${test.groups}</groups>
+                    <excludedGroups>${test.excluded.groups}</excludedGroups>
+                    <systemPropertyVariables>
+                        <telegram.live>${telegram.live}</telegram.live>
+                    </systemPropertyVariables>
                 </configuration>
             </plugin>
 
@@ -265,6 +275,38 @@
     </build>
 
     <profiles>
+        <!-- RSI scenario tests on synthesised data, delivered to the real bot:
+             TELEGRAM_BOT_TOKEN and TEST_CHAT_ID must be set in the environment -->
+        <profile>
+            <id>telegram</id>
+            <properties>
+                <telegram.live>true</telegram.live>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <includes>
+                                <include>**/RsiScenarioTest.java</include>
+                            </includes>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!-- Real Bybit + real Telegram + dynamodb-local (DYNAMODB_ENDPOINT must be localhost) -->
+        <profile>
+            <id>e2e</id>
+            <properties>
+                <telegram.live>true</telegram.live>
+                <test.groups>e2e</test.groups>
+                <test.excluded.groups></test.excluded.groups>
+            </properties>
+        </profile>
+
         <!-- Profile for PriceBot native image -->
         <profile>
             <id>native</id>

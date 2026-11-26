@@ -1,6 +1,7 @@
 package ru.ingvord.trading.repository;
 
 import ru.ingvord.trading.model.PriceAlert;
+import ru.ingvord.trading.model.RsiAlert;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.*;
 
@@ -10,6 +11,7 @@ public class AlertRepository {
 
     public static final String ALERT_STATUS_ACTIVE = "ACTIVE";
     public static final String ALERT_STATUS_TRIGGERED = "TRIGGERED";
+    public static final String ALERT_STATUS_RSI_ACTIVE = "RSI_ACTIVE";
 
     private final String alertsTable;
     private final DynamoDbClient dynamoDb;
@@ -117,6 +119,78 @@ public class AlertRepository {
         } while (lastEvaluatedKey != null && !lastEvaluatedKey.isEmpty());
 
         return allAlerts;
+    }
+
+    public void saveRsi(RsiAlert alert){
+        dynamoDb.putItem(PutItemRequest.builder()
+                .tableName(alertsTable)
+                .item(alert.toDynamoItem())
+                .build());
+    }
+
+    public void updateRsiZone(String alertId, String zone){
+        dynamoDb.updateItem(UpdateItemRequest.builder()
+                .tableName(alertsTable)
+                .key(Map.of("alertId", AttributeValue.builder().s(alertId).build()))
+                .updateExpression("SET lastZone = :zone")
+                .expressionAttributeValues(Map.of(":zone", AttributeValue.builder().s(zone).build()))
+                .build());
+    }
+
+    public List<RsiAlert> findRsiByStatus() {
+        List<RsiAlert> result = new ArrayList<>();
+        Map<String, AttributeValue> lastEvaluatedKey = null;
+
+        do {
+            QueryRequest.Builder builder = QueryRequest.builder()
+                    .tableName(alertsTable)
+                    .indexName("StatusIndex")
+                    .keyConditionExpression("#status = :status")
+                    .expressionAttributeNames(Map.of("#status", "status"))
+                    .expressionAttributeValues(Map.of(
+                            ":status", AttributeValue.builder().s(ALERT_STATUS_RSI_ACTIVE).build()
+                    ));
+
+            if (lastEvaluatedKey != null && !lastEvaluatedKey.isEmpty()) {
+                builder.exclusiveStartKey(lastEvaluatedKey);
+            }
+
+            QueryResponse response = dynamoDb.query(builder.build());
+            result.addAll(response.items().stream().map(RsiAlert::fromDynamoItem).toList());
+            lastEvaluatedKey = response.lastEvaluatedKey();
+
+        } while (lastEvaluatedKey != null && !lastEvaluatedKey.isEmpty());
+
+        return result;
+    }
+
+    public List<RsiAlert> findRsiByChatId(long chatId){
+        List<RsiAlert> result = new ArrayList<>();
+        Map<String, AttributeValue> lastEvaluatedKey = null;
+
+        do {
+            QueryRequest.Builder builder = QueryRequest.builder()
+                    .tableName(alertsTable)
+                    .indexName("ChatIdIndex")
+                    .keyConditionExpression("chatId = :chatId")
+                    .filterExpression("#status = :status")
+                    .expressionAttributeNames(Map.of("#status", "status"))
+                    .expressionAttributeValues(Map.of(
+                            ":chatId", AttributeValue.builder().s(String.valueOf(chatId)).build(),
+                            ":status", AttributeValue.builder().s(ALERT_STATUS_RSI_ACTIVE).build()
+                    ));
+
+            if (lastEvaluatedKey != null && !lastEvaluatedKey.isEmpty()) {
+                builder.exclusiveStartKey(lastEvaluatedKey);
+            }
+
+            QueryResponse response = dynamoDb.query(builder.build());
+            result.addAll(response.items().stream().map(RsiAlert::fromDynamoItem).toList());
+            lastEvaluatedKey = response.lastEvaluatedKey();
+
+        } while (lastEvaluatedKey != null && !lastEvaluatedKey.isEmpty());
+
+        return result;
     }
 
     public void delete(String alertId){
