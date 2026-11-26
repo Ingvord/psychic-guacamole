@@ -73,9 +73,9 @@ public class TelegramPriceBot implements RequestHandler<ScheduledEvent, String>,
         }
 
         this.dynamoDb = builder.build();
-        var twelveData = new TwelveData(httpClient, new SecretRepository().getParameter(TWELVEDATA_APIKEY));
-        this.priceService = twelveData;
-        this.indicatorService = new Bybit(httpClient);
+        var bybit = new Bybit(httpClient);
+        this.priceService = bybit;
+        this.indicatorService = bybit;
         this.alertRepository = new AlertRepository(ALERTS_TABLE, dynamoDb);
     }
     
@@ -288,14 +288,14 @@ public class TelegramPriceBot implements RequestHandler<ScheduledEvent, String>,
     ) {
         @Override
         public String toString() {
-            TickerMapper.CoinInfo coinInfo = TickerMapper.getCoinInfo(alert.symbol());
+            String name = alert.symbol().toUpperCase();
 
             if(type == TriggerType.BELOW_MIN){
                 return String.format("🚨 %s has dropped to $%,.2f\n(Below your target of $%,.2f)\n\n",
-                        coinInfo.displayName(), currentPrice, alert.targetPriceMin());
+                        name, currentPrice, alert.targetPriceMin());
             } else if(type == TriggerType.ABOVE_MAX){
                 return String.format("🚀 %s has risen to $%,.2f\n(Above your target of $%,.2f)\n\n",
-                        coinInfo.displayName(), currentPrice, alert.targetPriceMax());
+                        name, currentPrice, alert.targetPriceMax());
             } else {
                 return "Something went wrong!";// :-P
             }

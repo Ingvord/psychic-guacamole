@@ -9,7 +9,6 @@ import ru.ingvord.trading.fixtures.*;
 import ru.ingvord.trading.model.PriceAlert;
 import ru.ingvord.trading.model.RsiAlert;
 import ru.ingvord.trading.service.Bybit;
-import ru.ingvord.trading.service.PriceService;
 import ru.ingvord.trading.service.RsiCalculator;
 import ru.ingvord.trading.service.TelegramBotCommandService;
 
@@ -21,9 +20,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.anySet;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
+import static ru.ingvord.trading.fixtures.FakeHttp.query;
 import static ru.ingvord.trading.repository.AlertRepository.ALERT_STATUS_ACTIVE;
 import static ru.ingvord.trading.repository.AlertRepository.ALERT_STATUS_RSI_ACTIVE;
 
@@ -39,7 +36,6 @@ class RsiScenarioTest {
 
     private FakeHttp http;
     private InMemoryAlertRepository repo;
-    private PriceService priceService;
     private TelegramWebhookHandler webhook;
     private TelegramPriceBot bot;
     private Context context;
@@ -48,14 +44,12 @@ class RsiScenarioTest {
     void setUp() throws Exception {
         http = FakeHttp.fromEnv();
         repo = new InMemoryAlertRepository();
-        priceService = mock(PriceService.class);
-        doReturn(new BigDecimal("100")).when(priceService).getCurrentPrice(org.mockito.ArgumentMatchers.anyString());
         context = TestContext.create();
 
         var bybit = new Bybit(http.client);
-        var commands = new TelegramBotCommandService(priceService, bybit, repo);
+        var commands = new TelegramBotCommandService(bybit, bybit, repo);
         webhook = new TelegramWebhookHandler(http.client, commands, TelegramEnv.token(), SECRET);
-        bot = new TelegramPriceBot(priceService, bybit, repo, TelegramEnv.token(), http.client);
+        bot = new TelegramPriceBot(bybit, bybit, repo, TelegramEnv.token(), http.client);
     }
 
     @AfterEach
@@ -161,12 +155,13 @@ class RsiScenarioTest {
 
     @Test
     void s6_unknownSymbol_isRejectedAndNotStored() {
-        http.header("Scenario 6: /rsi aapl 1d (not on Bybit)");
+        http.header("Scenario 6: /rsi zzzz 1d (not on Bybit linear or spot)");
         http.bybit(uri -> new FakeHttp.Stub(200, CandleFixtures.invalidSymbolJson()));
 
-        String reply = send(chatA, "/rsi aapl 1d");
+        String reply = send(chatA, "/rsi zzzz 1d");
 
-        assertTrue(reply.contains("crypto"), reply);
+        assertTrue(reply.contains("Failed to create RSI alert"), reply);
+        assertEquals(List.of("linear", "spot"), http.bybitCalls.stream().map(u -> query(u, "category")).toList());
         assertTrue(repo.rsiAlerts.isEmpty());
     }
 
@@ -174,7 +169,7 @@ class RsiScenarioTest {
     void s7_priceAlertCommands_ignoreRsiAlerts() {
         http.header("Scenario 7: /list and /clear leave RSI alerts alone");
         send(chatA, "/rsi btc 4h");
-        assertTrue(send(chatA, "/alert btc 90 110").contains("Alert Created"));
+        assertTrue(send(chatA, "/alert btc 50000 70000").contains("Alert Created"));
 
         String list = send(chatA, "/list");
         assertTrue(list.contains("Range"), list);
@@ -283,13 +278,13 @@ class RsiScenarioTest {
     }
 
     @Test
-    void s12_rsiFailure_doesNotBreakPriceAlerts() throws Exception {
-        http.header("Scenario 12: price alert fires even though Bybit is down");
-        repo.save(new PriceAlert(UUID.randomUUID().toString(), chatA, "btc",
-                new BigDecimal("90"), new BigDecimal("110"), System.currentTimeMillis(), ALERT_STATUS_ACTIVE));
+    void s12_rsiFailure_doesNotBreakPriceAlerts() {
+        http.header("Scenario 12: price alert fires even though the kline endpoint is down");
+        priceAlert(chatA, "btc", "90", "110");
         rsiAlert(chatA, "btc", "4h", 14, "close", RsiAlert.ZONE_NORMAL);
-        doReturn(Map.of("BTC", new BigDecimal("120"))).when(priceService).getPrices(anySet());
-        http.bybit(uri -> new FakeHttp.Stub(500, "down"));
+        http.bybit(uri -> uri.getPath().endsWith("/kline")
+                ? new FakeHttp.Stub(500, "down")
+                : new FakeHttp.Stub(200, CandleFixtures.tickersJson("linear", Map.of("BTCUSDT", "120"))));
 
         bot.handleRequest(null, context);
 
@@ -298,19 +293,96 @@ class RsiScenarioTest {
     }
 
     @Test
-    void s13_priceAndRsiAlertsInOneRun() throws Exception {
+    void s13_priceAndRsiAlertsInOneRun() {
         http.header("Scenario 13: price alert + RSI alert in the same run");
-        repo.save(new PriceAlert(UUID.randomUUID().toString(), chatA, "btc",
-                new BigDecimal("90"), new BigDecimal("110"), System.currentTimeMillis(), ALERT_STATUS_ACTIVE));
+        priceAlert(chatA, "btc", "90", "110");
         rsiAlert(chatA, "btc", "4h", 14, "close", RsiAlert.ZONE_NORMAL);
-        doReturn(Map.of("BTC", new BigDecimal("120"))).when(priceService).getPrices(anySet());
-        http.bybitKlines(CandleFixtures.klineJson("BTCUSDT", CandleFixtures.selloff(200, 6)));
+        http.bybit(uri -> uri.getPath().endsWith("/kline")
+                ? new FakeHttp.Stub(200, CandleFixtures.klineJson("BTCUSDT", CandleFixtures.selloff(200, 6)))
+                : new FakeHttp.Stub(200, CandleFixtures.tickersJson("linear", Map.of("BTCUSDT", "120"))));
 
         bot.handleRequest(null, context);
 
         assertEquals(2, http.telegram.size());
         assertTrue(http.telegram.stream().anyMatch(m -> m.text().contains("Price Alert")));
         assertTrue(http.telegram.stream().anyMatch(m -> m.text().contains("oversold")));
+    }
+
+    // ---------------------------------------------------------------- stocks, ETFs and symbol resolution
+
+    @Test
+    void s14_stockEtfRsi_usesLinear() {
+        http.header("Scenario 14: /rsi qqq 1h (ETF perpetual, linear only)");
+
+        String reply = send(chatA, "/rsi qqq 1h");
+
+        var expected = RsiCalculator.wilder(CandleFixtures.column(CandleFixtures.recordedQqqKlines(), 4), 14);
+        assertTrue(reply.contains("QQQ") && reply.contains(String.format("%.2f", expected)), reply);
+        assertTrue(http.bybitCalls.get(0).toString().contains("category=linear&symbol=QQQUSDT&interval=60"));
+        assertEquals(1, http.bybitCalls.size());
+    }
+
+    @Test
+    void s15_priceOfStockEtf() {
+        http.header("Scenario 15: /price qqq");
+
+        String reply = send(chatA, "/price qqq");
+
+        assertTrue(reply.contains("QQQ") && reply.contains("$638.40"), reply);
+        assertEquals(1, http.bybitCalls.size(), "one linear ticker call, no spot call");
+    }
+
+    @Test
+    void s16_priceOfSpotOnlySymbol_fallsBackToSpot() {
+        http.header("Scenario 16: /price aaplx (tokenised stock, spot only)");
+
+        String reply = send(chatA, "/price aaplx");
+
+        assertTrue(reply.contains("$358.17"), reply);
+        assertEquals(List.of("linear", "spot"), http.bybitCalls.stream().map(u -> query(u, "category")).toList());
+    }
+
+    @Test
+    void s17_unknownSymbol_isRejected() {
+        http.header("Scenario 17: /price zzzz and /alert zzzz");
+
+        assertTrue(send(chatA, "/price zzzz").contains("Failed to get price"));
+        assertTrue(send(chatA, "/alert zzzz 1 2").contains("Failed to create alert"));
+        assertTrue(repo.priceAlerts.isEmpty());
+    }
+
+    @Test
+    void s18_createStockAlert_andCheckerFiresIt() {
+        http.header("Scenario 18: /alert aapl 300 340 → checker fires (AAPL perp is 356.76)");
+
+        String reply = send(chatA, "/alert aapl 300 340");
+        assertTrue(reply.contains("Alert Created") && reply.contains("356.76"), reply);
+        assertEquals("aapl", repo.priceAlerts.values().iterator().next().symbol());
+
+        http.reset();
+        bot.handleRequest(null, context);
+
+        assertEquals(1, http.bybitCalls.size(), "one linear snapshot prices the whole run");
+        assertEquals(1, http.telegram.size());
+        String alert = http.telegram.get(0).text();
+        assertTrue(alert.contains("AAPL has risen to $356.76") && alert.contains("$340.00"), alert);
+    }
+
+    @Test
+    void s19_legacyStoredSymbols_stillResolve() {
+        http.header("Scenario 19: alerts stored in the Twelve Data / CoinGecko era (btc/usd, bitcoin, matic)");
+        priceAlert(chatA, "btc/usd", "1", "1000");
+        priceAlert(chatA, "bitcoin", "1", "1000");
+        priceAlert(chatA, "matic", "0.01", "0.05");
+
+        bot.handleRequest(null, context);
+
+        assertEquals(1, http.bybitCalls.size(), "all three are on linear");
+        assertEquals(1, http.telegram.size(), "one combined message");
+        String message = http.telegram.get(0).text();
+        assertEquals(3, message.split("has risen to", -1).length - 1, message);
+        assertTrue(message.contains("BTC/USD has risen to $60,614.60"), message);
+        assertTrue(message.contains("MATIC has risen to $0.08"), message);
     }
 
     // ---------------------------------------------------------------- helpers
@@ -344,6 +416,13 @@ class RsiScenarioTest {
         var alert = new RsiAlert(UUID.randomUUID().toString(), chatId, symbol, tf, period, series, zone,
                 System.currentTimeMillis(), ALERT_STATUS_RSI_ACTIVE);
         repo.saveRsi(alert);
+        return alert;
+    }
+
+    private PriceAlert priceAlert(long chatId, String symbol, String min, String max) {
+        var alert = new PriceAlert(UUID.randomUUID().toString(), chatId, symbol,
+                new BigDecimal(min), new BigDecimal(max), System.currentTimeMillis(), ALERT_STATUS_ACTIVE);
+        repo.save(alert);
         return alert;
     }
 

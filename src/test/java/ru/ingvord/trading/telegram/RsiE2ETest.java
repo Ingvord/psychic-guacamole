@@ -10,7 +10,6 @@ import ru.ingvord.trading.fixtures.TestContext;
 import ru.ingvord.trading.model.RsiAlert;
 import ru.ingvord.trading.repository.AlertRepository;
 import ru.ingvord.trading.service.Bybit;
-import ru.ingvord.trading.service.PriceService;
 import ru.ingvord.trading.service.TelegramBotCommandService;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -26,11 +25,9 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
 
 /**
  * Real Bybit API + real Telegram bot + the real AlertRepository on dynamodb-local.
@@ -98,12 +95,9 @@ class RsiE2ETest {
         bybit = new Bybit(http.client);
         context = TestContext.create();
 
-        PriceService priceService = mock(PriceService.class);
-        doReturn(new BigDecimal("100")).when(priceService).getCurrentPrice(anyString());
-
-        var commands = new TelegramBotCommandService(priceService, bybit, repo);
+        var commands = new TelegramBotCommandService(bybit, bybit, repo);
         webhook = new TelegramWebhookHandler(http.client, commands, TelegramEnv.token(), SECRET);
-        bot = new TelegramPriceBot(priceService, bybit, repo, TelegramEnv.token(), http.client);
+        bot = new TelegramPriceBot(bybit, bybit, repo, TelegramEnv.token(), http.client);
     }
 
     @AfterEach
@@ -184,6 +178,38 @@ class RsiE2ETest {
         assertEquals(before, http.telegram.size(), "same zone on the next run must stay silent");
 
         assertTrue(send("/rsi rm " + alert.alertId().substring(0, 8)).contains("removed"));
+    }
+
+    @Test
+    @Order(3)
+    void stockAndCryptoPrices_andPriceAlert_againstRealBybit() throws Exception {
+        http.header("E2E 3: real prices for a stock ETF perpetual (QQQ) and crypto (BTC), plus a price alert");
+
+        var prices = bybit.getPrices(Set.of("qqq", "btc"));
+        assertEquals(Set.of("qqq", "btc"), prices.keySet());
+        BigDecimal qqq = prices.get("qqq");
+        assertTrue(qqq.signum() > 0 && prices.get("btc").signum() > 0);
+
+        // the single-symbol endpoint agrees with the snapshot (same market, seconds apart)
+        BigDecimal single = bybit.getCurrentPrice("qqq");
+        assertTrue(single.subtract(qqq).abs().divide(qqq, 6, java.math.RoundingMode.HALF_UP).compareTo(new BigDecimal("0.01")) < 0,
+                "snapshot " + qqq + " vs single " + single);
+        assertTrue(send("/price qqq").contains("QQQ"));
+        http.header(String.format("E2E: QQQ = %s, BTC = %s (Bybit linear) — compare with the Bybit app", qqq.toPlainString(), prices.get("btc").toPlainString()));
+
+        // a range just above the current price: the checker must report "dropped below" through real DynamoDB
+        BigDecimal min = qqq.multiply(new BigDecimal("1.05")).setScale(2, java.math.RoundingMode.HALF_UP);
+        BigDecimal max = qqq.multiply(new BigDecimal("1.5")).setScale(2, java.math.RoundingMode.HALF_UP);
+        assertTrue(send("/alert qqq " + min + " " + max).contains("Alert Created"));
+        http.reset();
+
+        bot.handleRequest(null, context);
+
+        assertEquals(1, http.telegram.stream().filter(m -> m.text().contains("QQQ has dropped to")).count());
+
+        // price alerts repeat on every run by design; clean up
+        String id = repo.findByChatId(chat).get(0).alertId();
+        assertTrue(send("/remove " + id.substring(0, 8)).contains("removed"));
     }
 
     // ---------------------------------------------------------------- helpers

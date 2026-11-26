@@ -20,7 +20,6 @@ Resources:
 #          WEBHOOK_SECRET_TOKEN: ${WEBHOOK_SECRET_TOKEN}
 #          ALERTS_TABLE: ${WEBHOOK_SECRET_TOKEN}
 #          DYNAMODB_ENDPOINT: ${DYNAMODB_ENDPOINT}
-#          TWELVEDATA_APIKEY: ${TWELVEDATA_APIKEY}
 ##          JAVA_TOOL_OPTIONS: -agentlib:native-image-agent=config-merge-dir=/var/task/src/main/resources/META-INF/native-image
 #      Events:
 #        Webhook:
@@ -65,7 +64,6 @@ Resources:
           WEBHOOK_SECRET_TOKEN: ${WEBHOOK_SECRET_TOKEN}
           ALERTS_TABLE: ${WEBHOOK_SECRET_TOKEN}
           DYNAMODB_ENDPOINT: ${DYNAMODB_ENDPOINT}
-          TWELVEDATA_APIKEY: ${TWELVEDATA_APIKEY}
       Events:
         Webhook:
           Type: HttpApi

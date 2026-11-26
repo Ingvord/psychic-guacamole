@@ -2,18 +2,19 @@ package ru.ingvord.trading.telegram;
 
 public class TelegramBotMessages {
     public static final String WELCOME = """
-            🤖 **Welcome to Crypto Price Alert Bot!**
+            🤖 **Welcome to the Bybit Price Alert Bot!**
             
-            Track cryptocurrency prices and get instant notifications when they reach your target levels.
+            Track Bybit prices (crypto, stocks and ETFs) and get instant notifications when they reach your target levels.
             
             **Quick Start:**
             • `/alert BTC 40000 50000` - Get alerted when Bitcoin moves
+            • `/alert QQQ 600 700` - Same for stocks and ETFs
             • `/price ETH` - Check current Ethereum price
             • `/list` - See all your alerts
             
-            💡 Use ticker symbols (BTC, ETH, SOL) or full names (bitcoin, ethereum, solana)
+            💡 Use Bybit symbols: BTC, ETH, SOL, QQQ, AAPL, or the full name like ETHUSDT
             
-            Type `/help` for all commands or `/tickers` for supported cryptocurrencies.
+            Type `/help` for all commands or `/tickers` for supported symbols.
             """;
 
     public static final String HELP = """
@@ -26,12 +27,12 @@ public class TelegramBotMessages {
             
             • `/price <ticker>` - Get current price
               Example: `/price BTC`
-              Example: `/price ethereum`
+              Example: `/price QQQ`
             
             **📈 RSI Alerts:**
             • `/rsi <ticker> <tf> [period] [close|open|high|low]` - Notify when RSI enters overbought (70+) / oversold (30-)
               Timeframes: 15m 30m 1h 2h 4h 1d 1w. Default period 14, default source close
-              Crypto only (Bybit spot data)
+              Any Bybit symbol (crypto, stocks, ETFs)
               Example: `/rsi BTC 4h`
             • `/rsi` - List your RSI alerts
             • `/rsi rm <id>` - Remove an RSI alert
@@ -43,11 +44,11 @@ public class TelegramBotMessages {
             
             **ℹ️ Information:**
             • `/help` - Show this message
-            • `/tickers` - Show supported cryptocurrencies
+            • `/tickers` - Show supported symbols
             
             **💡 Pro Tips:**
-            • Use ticker symbols (BTC, ETH, SOL) for quick access
-            • Or use full names (bitcoin, ethereum, solana)
+            • Use Bybit symbols (BTC, ETH, SOL, QQQ, AAPL) for quick access
+            • Or full symbols (ETHUSDT); prefixed contracts need the full name (1000PEPE)
             • You can have up to 20 active alerts
             • Alerts stay active until you remove them
             
@@ -69,7 +70,7 @@ public class TelegramBotMessages {
             
             This will alert you when the price goes **below** the minimum or **above** the maximum.
             
-            💡 Tip: Use `/tickers` to see all supported cryptocurrencies
+            💡 Tip: Use `/tickers` to see supported symbols
             """;
 
     public static final String ALERT_CREATED = """
@@ -142,9 +143,9 @@ public class TelegramBotMessages {
             
             **Examples:**
             • `/price BTC`
-            • `/price ethereum`
+            • `/price QQQ`
             • `/price SOL`
             
-            💡 Use `/tickers` to see all supported cryptocurrencies
+            💡 Use `/tickers` to see supported symbols
             """;
 }

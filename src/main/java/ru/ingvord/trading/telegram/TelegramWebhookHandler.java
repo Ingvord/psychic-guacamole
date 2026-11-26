@@ -8,10 +8,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import ru.ingvord.trading.repository.AlertRepository;
 import ru.ingvord.trading.repository.SecretRepository;
 import ru.ingvord.trading.service.Bybit;
-import ru.ingvord.trading.service.Coingecko;
 import ru.ingvord.trading.service.PriceServiceWithCache;
 import ru.ingvord.trading.service.TelegramBotCommandService;
-import ru.ingvord.trading.service.TwelveData;
 import ru.ingvord.trading.util.TracedHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
@@ -80,10 +78,10 @@ public class TelegramWebhookHandler implements RequestHandler<APIGatewayV2HTTPEv
         String alertsTable = Optional.ofNullable(ALERTS_TABLE).orElse("price-alerts-local");
 
         this.dynamoDb = builder.build();
-        var twelveData = new TwelveData(httpClient, new SecretRepository().getParameter(TWELVEDATA_APIKEY));
+        var bybit = new Bybit(httpClient);
         this.telegramCommandService = new TelegramBotCommandService(
-                new PriceServiceWithCache(twelveData),
-                new Bybit(httpClient),
+                new PriceServiceWithCache(bybit),
+                bybit,
                 new AlertRepository(alertsTable, dynamoDb));
 
         this.telegramBotToken = new SecretRepository().getParameter(TELEGRAM_BOT_TOKEN);

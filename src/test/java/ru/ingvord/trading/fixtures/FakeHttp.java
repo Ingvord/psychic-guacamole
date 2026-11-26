@@ -46,7 +46,7 @@ public class FakeHttp {
     private final String token;
     private final boolean realBybit;
     private final HttpClient real;
-    private Function<URI, Stub> bybit = uri -> new Stub(200, CandleFixtures.recordedKlines());
+    private Function<URI, Stub> bybit = FakeHttp::defaultBybit;
 
     private FakeHttp(boolean live, String token, long liveChatId, boolean realBybit) {
         this.live = live;
@@ -74,6 +74,36 @@ public class FakeHttp {
     /** Real Bybit and real Telegram (calls are still recorded). */
     public static FakeHttp live() {
         return new FakeHttp(true, TelegramEnv.token(), TelegramEnv.chatId(), true);
+    }
+
+    /**
+     * Default Bybit behaviour, shaped like the real API: kline returns recorded candles for any symbol
+     * (QQQUSDT gets its own recording); tickers returns the recorded snapshot of the requested category,
+     * filtered to one symbol when asked (empty list if it is listed in the other category, 10001 if unknown).
+     */
+    private static Stub defaultBybit(URI uri) {
+        String symbol = query(uri, "symbol");
+        if (uri.getPath().endsWith("/kline")) {
+            return new Stub(200, "QQQUSDT".equals(symbol) ? CandleFixtures.recordedQqqKlines() : CandleFixtures.recordedKlines());
+        }
+
+        String snapshot = CandleFixtures.recordedTickers(query(uri, "category"));
+        if (symbol == null) {
+            return new Stub(200, snapshot);
+        }
+        boolean knownAnywhere = CandleFixtures.recordedTickers("linear").contains("\"" + symbol + "\"")
+                || CandleFixtures.recordedTickers("spot").contains("\"" + symbol + "\"");
+        return knownAnywhere
+                ? new Stub(200, CandleFixtures.filterTickers(snapshot, symbol))
+                : new Stub(200, CandleFixtures.invalidSymbolJson());
+    }
+
+    /** Query parameter of a request URI, or null. */
+    public static String query(URI uri, String name) {
+        for (String pair : uri.getQuery().split("&")) {
+            if (pair.startsWith(name + "=")) return pair.substring(name.length() + 1);
+        }
+        return null;
     }
 
     public FakeHttp bybit(Function<URI, Stub> handler) {

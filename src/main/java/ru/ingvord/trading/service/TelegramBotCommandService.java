@@ -74,11 +74,15 @@ public class TelegramBotCommandService {
     }
 
     private String handleTickersCommand() {
-        return "💎 **Supported Cryptocurrencies**\n\n" +
-                TickerMapper.getAllTickersMessage() +
-                "\n\n💡 **Usage:**\n" +
-                "• `/price BTC` - Check Bitcoin price\n" +
-                "• `/alert ETH 2000 3000` - Set Ethereum alert";
+        return "💎 **Supported Symbols**\n\n" +
+                "Any symbol listed on Bybit works: crypto and stocks/ETFs.\n" +
+                "• Short names: `BTC`, `ETH`, `SOL`, `QQQ`, `SPY`, `AAPL`, `TSLA`\n" +
+                "• Full Bybit symbols: `ETHUSDT`, `ETHUSDC`\n" +
+                "• Prefixed contracts need the full name: `1000PEPE`\n\n" +
+                "💡 **Usage:**\n" +
+                "• `/price QQQ` - Check price\n" +
+                "• `/alert ETH 2000 3000` - Set Ethereum alert\n" +
+                "• `/rsi BTC 4h` - RSI alert";
     }
 
     private String handleAlertCommand(long chatId, String text, Context context) {
@@ -159,7 +163,7 @@ public class TelegramBotCommandService {
         } catch (Exception e) {
             context.getLogger().log("Error creating alert: " + e.getMessage());
             return "❌ Failed to create alert. Please check the symbol name and try again.\n\n" +
-                    "Popular symbols: bitcoin, ethereum, cardano, solana, dogecoin";
+                    "Use a Bybit symbol, e.g. BTC, ETH, SOL, QQQ, AAPL (see /tickers)";
         }
     }
 
@@ -279,7 +283,7 @@ public class TelegramBotCommandService {
         } catch (Exception e) {
             context.getLogger().log("Error getting price: " + e.getMessage());
             return "❌ Failed to get price. Please check the symbol name and try again.\n\n" +
-                    "Popular symbols: bitcoin, ethereum, cardano, solana, dogecoin";
+                    "Use a Bybit symbol, e.g. BTC, ETH, SOL, QQQ, AAPL (see /tickers)";
         }
     }
 
@@ -324,7 +328,7 @@ public class TelegramBotCommandService {
                     symbol.toUpperCase(), interval, period, seriesType, rsi, alertId.substring(0, 8));
         } catch (Exception e) {
             context.getLogger().log("Error creating RSI alert: " + e.getMessage());
-            return "❌ Failed to create RSI alert. RSI supports crypto pairs listed on Bybit spot (e.g. BTC, ETH, SOL) — please check the symbol and try again.";
+            return "❌ Failed to create RSI alert. Please check the symbol (any Bybit symbol, e.g. BTC, ETH, QQQ) and try again.";
         }
     }
 
