@@ -30,9 +30,6 @@
         <native.maven.plugin.version>0.10.2</native.maven.plugin.version>
         <imageName>telegram-bot</imageName>
 
-        <!-- Lambda deploy configuration -->
-        <lambda.function.name>telegram-price-bot-native</lambda.function.name>
-
         <!-- Test selection: default = offline tests only; see profiles telegram / e2e -->
         <test.groups></test.groups>
         <test.excluded.groups>e2e</test.excluded.groups>
@@ -358,31 +355,6 @@
                                     </descriptors>
                                     <attach>false</attach>
                                     <appendAssemblyId>false</appendAssemblyId>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                    <plugin>
-                        <groupId>org.codehaus.mojo</groupId>
-                        <artifactId>exec-maven-plugin</artifactId>
-                        <version>3.3.0</version>
-                        <executions>
-                            <execution>
-                                <id>lambda-deploy</id>
-                                <phase>deploy</phase>
-                                <goals>
-                                    <goal>exec</goal>
-                                </goals>
-                                <configuration>
-                                    <executable>aws</executable>
-                                    <arguments>
-                                        <argument>lambda</argument>
-                                        <argument>update-function-code</argument>
-                                        <argument>--function-name</argument>
-                                        <argument>${lambda.function.name}</argument>
-                                        <argument>--zip-file</argument>
-                                        <argument>fileb://${project.build.directory}/function.zip</argument>
-                                    </arguments>
                                 </configuration>
                             </execution>
                         </executions>

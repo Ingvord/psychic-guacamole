@@ -20,15 +20,16 @@ With sdkman:
 sdk use java 21-graalce
 ```
 
-Build native image, package `function.zip`, and deploy to AWS Lambda in one command:
+Build the native image and package `function.zip` (binary + `bootstrap` + `libaws-crt-jni.so`):
 ```bash
-mvn -Pnative deploy -DskipTests
+mvn -Pnative package -DskipTests
 ```
 
-To deploy to a different function:
+Deploying is done with SAM, which uploads `function.zip` and applies a reviewed CloudFormation change set:
 ```bash
-mvn -Pnative deploy -DskipTests -Dlambda.function.name=<function-name>
+sam deploy
 ```
+See `DEPLOY_SAM.md`. Maven no longer pushes code to Lambda itself.
 
 ## Java fat JAR (webhook handler Lambda)
 

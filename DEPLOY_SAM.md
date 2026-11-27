@@ -24,10 +24,10 @@ sam validate --lint
 sam deploy                                                    # shows a change set and asks to confirm
 ```
 `sam deploy` uploads `function.zip` through S3 (managed bucket), so there is no direct-upload size limit.
-Do not run `mvn -Pnative deploy` against stack-managed functions: it pushes code outside CloudFormation.
+Code reaches Lambda only through `sam deploy`; the Maven `deploy` step that used to call `aws lambda update-function-code` was removed.
 
 ## One-time migration from the hand-made setup (side by side)
-The old hand-made resources stay untouched until the end, so rollback is flipping two switches:
+The old hand-made resources stayed untouched until the end, so rollback was flipping two switches (they have since been deleted, see step 4):
 - `telegram-price-bot-frontend-native`: the **live webhook** (native; API `telegram-price-bot-api`, route `ANY /`; its secret and
   token are the SSM references `/telegram-bot/webhook-secret` and `/telegram-bot/token`)
 - `telegram-price-bot-frontend`: Java 21 webhook, only reached through that API's `$default` route (other paths)
@@ -98,13 +98,12 @@ aws events enable-rule --name telegram-price-bot-checker-schedule
 # samconfig.toml: ScheduleState=DISABLED, then sam deploy
 ```
 
-**4. Decommission the old resources** (after a few clean days)
-Delete the functions `telegram-price-bot-frontend-native`, `telegram-price-bot-frontend` and `telegram-price-bot-native`
-(and `telegram-price-bot` once you know it is unused), the API `telegram-price-bot-api`,
-the rule `telegram-price-bot-checker-schedule` (remove its target first), the IAM role
-`telegram-price-bot-lambda-role` with its `*FullAccess` policies, and the SSM parameter
-`/telegram-bot/twelvedata-apikey`. Then remove the `lambda-deploy` execution from `pom.xml`, which would
-otherwise let `mvn deploy` bypass CloudFormation.
+**4. Decommission the old resources** (done)
+Deleted: the functions `telegram-price-bot-frontend-native`, `telegram-price-bot-frontend`, `telegram-price-bot-native` and
+`telegram-price-bot`, the API `telegram-price-bot-api`, the rule `telegram-price-bot-checker-schedule`, the IAM role
+`telegram-price-bot-lambda-role` with its `*FullAccess` policies, and the SSM parameter `/telegram-bot/twelvedata-apikey`;
+the `lambda-deploy` step is gone from `pom.xml`. Kept: `/telegram-bot/token`, `/telegram-bot/webhook-secret` and the
+`PriceAlerts` table. Their old CloudWatch log groups (`/aws/lambda/telegram-price-bot*`) were left in place.
 
 ## Local development (unchanged)
 ```bash
