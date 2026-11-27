@@ -15,6 +15,7 @@ amazon/dynamodb-local:latest \
 
 ```bash
 sam local start-api \
+  --template template.yaml \
   --port 3000 \
   --env-vars env.json \
   --docker-network dynamodb_net \

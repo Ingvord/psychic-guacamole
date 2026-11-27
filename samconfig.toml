@@ -1,0 +1,28 @@
+version = 0.1
+
+[default.global.parameters]
+stack_name = "psychic-guacamole"
+
+# Always use template.yaml: a leftover .aws-sam/build/template.yaml from `sam build` otherwise takes precedence
+# and deploys/runs the wrong stack.
+[default.deploy.parameters]
+template_file = "template.yaml"
+region = "eu-central-1"
+resolve_s3 = true
+s3_prefix = "psychic-guacamole"
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+fail_on_empty_changeset = false
+tags = "Project=TelegramPriceBot"
+# Checker schedule state (see DEPLOY_SAM.md). Keep DISABLED while any other stack runs the checker:
+# two enabled schedules would notify every user twice.
+parameter_overrides = "ScheduleState=ENABLED"
+
+[default.validate.parameters]
+template_file = "template.yaml"
+
+[default.local_start_api.parameters]
+template_file = "template.yaml"
+
+[default.local_invoke.parameters]
+template_file = "template.yaml"

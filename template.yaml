@@ -1,93 +1,124 @@
-# template.yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
+Description: >
+  Telegram price and RSI alert bot on Bybit market data. Both Lambdas run the same GraalVM native image
+  (target/function.zip, built by `mvn -Pnative package -DskipTests`; the handler is picked via $_HANDLER).
+
+  Deploy: see DEPLOY_SAM.md. Local: `sam local start-api --port 3000 --env-vars env.json --docker-network dynamodb_net`
+  (env.json keys must match the logical IDs below; only variables declared here can be overridden).
+
+Parameters:
+  AlertsTableName:
+    Type: String
+    Default: PriceAlerts
+    Description: Existing DynamoDB table (not managed by this stack). Needs GSIs ChatIdIndex and StatusIndex.
+  TelegramTokenParam:
+    Type: String
+    Default: /telegram-bot/token
+    Description: 'SSM SecureString holding the bot token. Resolved by the function at runtime (ssm: prefix).'
+  WebhookSecretParam:
+    Type: String
+    Default: /telegram-bot/webhook-secret
+    Description: SSM SecureString holding the Telegram webhook secret token.
+  ScheduleState:
+    Type: String
+    Default: ENABLED
+    AllowedValues: [ENABLED, DISABLED]
+    Description: State of the 15-minute price checker schedule. Keep DISABLED while another stack still runs the checker.
+  LogRetentionDays:
+    Type: Number
+    Default: 30
+
 Globals:
   Function:
-    Timeout: 30
-    MemorySize: 512
+    Runtime: provided.al2023
+    Architectures: [x86_64]
+    CodeUri: target/function.zip
+    Tracing: Active
 
 Resources:
-#  TelegramWebhookFunction:
-#    Type: AWS::Serverless::Function
-#    Properties:
-#      Handler: ru.ingvord.trading.telegram.TelegramWebhookHandler::handleRequest
-#      CodeUri: /home/ingvord/Projects/psychic-guacamole
-#      Runtime: java21
-#      Environment:
-#        Variables:
-#          TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
-#          WEBHOOK_SECRET_TOKEN: ${WEBHOOK_SECRET_TOKEN}
-#          ALERTS_TABLE: ${WEBHOOK_SECRET_TOKEN}
-#          DYNAMODB_ENDPOINT: ${DYNAMODB_ENDPOINT}
-##          JAVA_TOOL_OPTIONS: -agentlib:native-image-agent=config-merge-dir=/var/task/src/main/resources/META-INF/native-image
-#      Events:
-#        Webhook:
-#          Type: HttpApi
-#          Properties:
-#            Path: /webhook
-#            Method: POST
-
-
-#  TelegramWebhookFunctionNative:
-#    Type: AWS::Serverless::Function
-#    Properties:
-#      CodeUri: target/function.zip
-#      Runtime: provided.al2023
-#      Timeout: 10
-#      MemorySize: 256
-#      Handler: ru.ingvord.trading.telegram.TelegramWebhookHandler::handleRequest
-#      Environment:
-#        Variables:
-#          TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
-#          WEBHOOK_SECRET_TOKEN: ${WEBHOOK_SECRET_TOKEN}
-#          ALERTS_TABLE: ${WEBHOOK_SECRET_TOKEN}
-#          DYNAMODB_ENDPOINT: ${DYNAMODB_ENDPOINT}
-#      Events:
-#        Webhook:
-#          Type: HttpApi
-#          Properties:
-#            Path: /webhook
-#            Method: POST
-
   TelegramWebhookHandlerNative:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: target/function.zip
-      Runtime: provided.al2023
+      Handler: ru.ingvord.trading.telegram.TelegramWebhookHandler::handleRequest
       Timeout: 10
       MemorySize: 256
-      Handler: ru.ingvord.trading.telegram.TelegramWebhookHandler::handleRequest
+      LoggingConfig:
+        LogGroup: !Ref WebhookLogGroup
       Environment:
         Variables:
-          TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
-          WEBHOOK_SECRET_TOKEN: ${WEBHOOK_SECRET_TOKEN}
-          ALERTS_TABLE: ${WEBHOOK_SECRET_TOKEN}
-          DYNAMODB_ENDPOINT: ${DYNAMODB_ENDPOINT}
+          TELEGRAM_BOT_TOKEN: !Sub 'ssm:${TelegramTokenParam}'
+          WEBHOOK_SECRET_TOKEN: !Sub 'ssm:${WebhookSecretParam}'
+          ALERTS_TABLE: !Ref AlertsTableName
+          DYNAMODB_ENDPOINT: ''   # empty = real DynamoDB; set to a local endpoint through env.json
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AlertsTableName
+        - Statement:
+            - Effect: Allow
+              Action: ssm:GetParameter
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${TelegramTokenParam}'
+                - !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${WebhookSecretParam}'
       Events:
         Webhook:
           Type: HttpApi
           Properties:
+            ApiId: !Ref HttpApi
             Path: /webhook
             Method: POST
 
-#  TelegramWebhookFunctionNative:
-#    Type: AWS::Serverless::Function
-#    Properties:
-#      CodeUri: target/function.zip
-#      Runtime: provided.al2023
-#      Timeout: 10
-#      MemorySize: 256
-#      Handler: ru.ingvord.trading.telegram.TelegramPriceBot::handleRequest
-#      Environment:
-#        Variables:
-#          TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
-#          WEBHOOK_SECRET_TOKEN: ${WEBHOOK_SECRET_TOKEN}
-#          ALERTS_TABLE: ${WEBHOOK_SECRET_TOKEN}
-#          DYNAMODB_ENDPOINT: ${DYNAMODB_ENDPOINT}
-#      Events:
-#        Webhook:
-#          Type: HttpApi
-#          Properties:
-#            Path: /webhook
-#            Method: POST
+  PriceCheckerNative:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: ru.ingvord.trading.telegram.TelegramPriceBot::handleRequest
+      Timeout: 30        # one tickers snapshot plus one kline request per distinct RSI series
+      MemorySize: 512
+      LoggingConfig:
+        LogGroup: !Ref PriceCheckerLogGroup
+      Environment:
+        Variables:
+          TELEGRAM_BOT_TOKEN: !Sub 'ssm:${TelegramTokenParam}'
+          ALERTS_TABLE: !Ref AlertsTableName
+          DYNAMODB_ENDPOINT: ''
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AlertsTableName
+        - Statement:
+            - Effect: Allow
+              Action: ssm:GetParameter
+              Resource: !Sub 'arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${TelegramTokenParam}'
+      Events:
+        Schedule:
+          Type: Schedule
+          Properties:
+            Schedule: rate(15 minutes)
+            State: !Ref ScheduleState
+            Description: Price and RSI alert check
+
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 100
+        ThrottlingRateLimit: 50
+
+  WebhookLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: !Ref LogRetentionDays
+
+  PriceCheckerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: !Ref LogRetentionDays
+
+Outputs:
+  WebhookUrl:
+    Description: Register this with Telegram setWebhook (together with the secret token)
+    Value: !Sub 'https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/webhook'
+  WebhookFunctionName:
+    Value: !Ref TelegramWebhookHandlerNative
+  PriceCheckerFunctionName:
+    Value: !Ref PriceCheckerNative
